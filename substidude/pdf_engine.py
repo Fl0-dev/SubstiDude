@@ -14,10 +14,35 @@ pymupdf.TOOLS.mupdf_display_warnings(False)
 
 MAX_FILE_BYTES = 10_000_000
 MAX_PAGES = 49
+MAX_IMAGE_PIXELS = 40_000_000
 
 
 class PDFError(ValueError):
     """Erreur présentable sans contenu documentaire ni chemin source."""
+
+
+def _check_image_dimensions(width: int, height: int) -> None:
+    if width <= 0 or height <= 0:
+        raise PDFError("Une image possède des dimensions invalides.")
+    if width * height > MAX_IMAGE_PIXELS:
+        raise PDFError("Une image dépasse la limite de 40 mégapixels.")
+
+
+def _check_images(document: pymupdf.Document) -> None:
+    # Examiner aussi les masques et objets non affichés, sans extraire leurs pixels.
+    for xref in range(1, document.xref_length()):
+        if document.xref_get_key(xref, "Subtype") != ("name", "/Image"):
+            continue
+        dimensions = [document.xref_get_key(xref, key) for key in ("Width", "Height")]
+        if any(kind != "int" for kind, _ in dimensions):
+            raise PDFError("Les dimensions d'une image ne sont pas prises en charge.")
+        _check_image_dimensions(*(int(value) for _, value in dimensions))
+
+    # Sans empreintes : pas de décodage des pixels pour calculer un hash.
+    # Couvre notamment les images inline absentes de la table des objets.
+    for page in document:
+        for image in page.get_image_info(hashes=False, xrefs=False):
+            _check_image_dimensions(image["width"], image["height"])
 
 
 def open_pdf(path: str | Path) -> pymupdf.Document:
@@ -54,6 +79,13 @@ def open_pdf(path: str | Path) -> pymupdf.Document:
             raise PDFError("Le PDF est malformé et nécessite une réparation non prise en charge.")
         if not 1 <= document.page_count <= MAX_PAGES:
             raise PDFError("Le PDF doit contenir de 1 à 49 pages.")
+        _check_images(document)
+    except PDFError:
+        document.close()
+        raise
+    except (RuntimeError, ValueError, OverflowError):
+        document.close()
+        raise PDFError("Impossible d'inspecter les images de ce PDF.") from None
     except Exception:
         document.close()
         raise

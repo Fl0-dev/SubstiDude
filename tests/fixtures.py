@@ -67,3 +67,37 @@ def zero_page_pdf():
     data += b"xref\n0 3\n0000000000 65535 f \n"
     data += b"".join(f"{offset:010} 00000 n \n".encode() for offset in offsets[1:])
     return data + f"trailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+
+
+def image_dimensions_pdf(width, height, *, inline=False, mask=False, nested=False):
+    """Petite fixture structurelle ; ne jamais rendre ses fausses grandes images."""
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=400)
+        if inline:
+            import zlib
+            content = (f"q 100 0 0 100 0 0 cm BI /W {width} /H {height} "
+                       "/BPC 8 /CS /G /F /Fl ID\n").encode()
+            content += zlib.compress(b"\x00") + b"\nEI Q"
+            xref = document.get_new_xref()
+            document.update_object(xref, "<< >>")
+            document.update_stream(xref, content)
+            page.set_contents(xref)
+        else:
+            image_xref = page.insert_image(page.rect, stream=scan_image())
+            if mask:
+                mask_xref = document.get_new_xref()
+                document.update_object(mask_xref, (
+                    f"<< /Type /XObject /Subtype /Image /Width {width} /Height {height} "
+                    "/BitsPerComponent 8 /ColorSpace /DeviceGray >>"
+                ))
+                document.update_stream(mask_xref, b"\x00")
+                document.xref_set_key(image_xref, "SMask", f"{mask_xref} 0 R")
+            else:
+                document.xref_set_key(image_xref, "Width", str(width))
+                document.xref_set_key(image_xref, "Height", str(height))
+        if nested:
+            with pymupdf.open() as wrapper:
+                outer_page = wrapper.new_page(width=300, height=400)
+                outer_page.show_pdf_page(outer_page.rect, document, 0)
+                return wrapper.tobytes(deflate=True)
+        return document.tobytes(deflate=True)

@@ -5,11 +5,14 @@ import hashlib
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import pymupdf
 
-from fixtures import KEPT, TARGET, make_pdf, zero_page_pdf
-from substidude.pdf_engine import MAX_FILE_BYTES, PDFError, open_pdf
+from fixtures import KEPT, TARGET, image_dimensions_pdf, make_pdf, zero_page_pdf
+from substidude.pdf_engine import (
+    MAX_FILE_BYTES, PDFError, _check_image_dimensions, open_pdf,
+)
 
 
 class InputTests(unittest.TestCase):
@@ -71,6 +74,46 @@ class InputTests(unittest.TestCase):
             document[0].insert_text((40, 250), "MODIFICATION EN MEMOIRE")
             self.assertIn("MODIFICATION", document[0].get_text())
         self.assertEqual(digest, hashlib.sha256(self.path.read_bytes()).digest())
+
+    def test_image_pixel_boundaries(self):
+        _check_image_dimensions(8000, 5000)
+        for width, height in ((40_000_001, 1), (8000, 5001)):
+            with self.subTest(width=width, height=height):
+                with self.assertRaisesRegex(PDFError, "40 mégapixels"):
+                    _check_image_dimensions(width, height)
+        for width, height in ((0, 10), (10, 0), (-1, 10)):
+            with self.subTest(width=width, height=height):
+                with self.assertRaisesRegex(PDFError, "dimensions invalides"):
+                    _check_image_dimensions(width, height)
+
+    def test_large_image_and_mask_rejected_without_extracting_pixels(self):
+        for options in ({}, {"mask": True}, {"nested": True}):
+            with self.subTest(options=options):
+                data = image_dimensions_pdf(8000, 5001, **options)
+                self.assertLess(len(data), MAX_FILE_BYTES)
+                self.path.write_bytes(data)
+                with patch.object(pymupdf.Page, "get_image_info", side_effect=AssertionError(
+                    "Les grandes images XObject doivent être refusées avant l'inspection des pages"
+                )), self.assertRaisesRegex(PDFError, "40 mégapixels"):
+                    open_pdf(self.path)
+
+    def test_inline_images_are_checked_without_hashes(self):
+        # Plafond réduit pour vérifier la voie inline sans grosse allocation possible.
+        self.path.write_bytes(image_dimensions_pdf(8, 8, inline=True))
+        with patch("substidude.pdf_engine.MAX_IMAGE_PIXELS", 63):
+            with self.assertRaisesRegex(PDFError, "40 mégapixels"):
+                open_pdf(self.path)
+        original = pymupdf.Page.get_image_info
+        calls = []
+
+        def inspect_images(page, **options):
+            calls.append(options)
+            return original(page, **options)
+
+        with patch.object(pymupdf.Page, "get_image_info", inspect_images):
+            with open_pdf(self.path) as doc:
+                self.assertEqual(doc.page_count, 1)
+        self.assertEqual(calls, [{"hashes": False, "xrefs": False}])
 
 
 class CorpusTests(unittest.TestCase):

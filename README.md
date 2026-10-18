@@ -33,6 +33,9 @@ contenu est pris en charge pour une suppression : cette validation reste à fair
 
 - Fichier non vide et strictement inférieur à 10 000 000 octets.
 - De 1 à 49 pages ; les autres limites seront validées au prototype.
+- Au maximum 40 000 000 pixels par image ; contrôle des dimensions des images
+  XObject, masques et images inline. Ce plafond individuel ne borne pas la mémoire
+  totale ni le rendu. Les dimensions indirectes des XObject sont refusées à ce stade.
 - Temporaires d'export près de la destination, prévue locale et non synchronisée.
 - Aucune garantie d'anonymisation exhaustive ; contrôle humain nécessaire.
 
