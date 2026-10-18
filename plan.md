@@ -83,17 +83,19 @@ Ne pas imposer une classe par fonction. Fusionner un petit module si cela simpli
 
 ### Tâches
 
-- [ ] Vérifier Python disponible et choisir une version supportée par les roues Windows des dépendances.
-- [ ] Créer un environnement `.venv` et les fichiers de dépendances avec versions exactes testées.
-- [ ] Ajouter `.gitignore` : environnement, caches, construction, sorties de tests et documents de travail. Les seuls PDF versionnés éventuels doivent être synthétiques et explicitement identifiés.
-- [ ] Ajouter le texte officiel intégral AGPLv3 dans `LICENSE` et les premières instructions du README.
-- [ ] Confirmer le titulaire réel du copyright auprès de l'utilisateur avant publication ; ne pas inventer son identité depuis son pseudonyme GitHub.
-- [ ] Choisir une police libre autorisant redistribution et intégration PDF, puis inclure ses mentions.
-- [ ] Initialiser l'inventaire des licences, y compris Qt, MuPDF et bibliothèques transitives réellement embarquées.
+- [x] Vérifier Python disponible et choisir une version supportée par les roues Windows des dépendances.
+- [x] Créer un environnement `.venv` et les fichiers de dépendances avec versions exactes testées.
+- [x] Ajouter `.gitignore` : environnement, caches, construction, sorties de tests et documents de travail. Les seuls PDF versionnés éventuels doivent être synthétiques et explicitement identifiés.
+- [x] Ajouter le texte officiel intégral AGPLv3 dans `LICENSE` et les premières instructions du README.
+- [x] Confirmer le titulaire réel du copyright auprès de l'utilisateur avant publication ; ne pas inventer son identité depuis son pseudonyme GitHub.
+- [x] Choisir une police libre autorisant redistribution et intégration PDF, puis inclure ses mentions.
+- [x] Initialiser l'inventaire des licences, y compris Qt, MuPDF et bibliothèques transitives réellement embarquées.
 
 ### Vérification / sortie
 
 Installation reproductible dans un environnement neuf ; imports des composants réussis. Consigner les versions choisies et les éventuelles questions de licence. La mention SPDX doit figurer dans les nouveaux fichiers source propres au projet.
+
+**Résultat de la phase 0 :** titulaire confirmé par l'utilisateur : Girard Florian. Python 3.12.0 64 bits disponible ; roues Windows installées pour PyMuPDF/MuPDF 1.28.2, Pillow 13.0.0 et PyInstaller 6.22.3, dépendances transitives de construction épinglées. Police Noto Sans Regular et licence OFL embarquées ; texte AGPLv3 officiel téléchargé depuis GNU. Réinstallation depuis `requirements-dev.txt` dans `.venv-check` réussie ; `pip check` sans erreur dans les deux environnements. `python -m unittest discover -s tests -v` : 2 tests réussis dans chaque environnement (accents extractibles avec police intégrée, rendu PDF et pixels, présence des licences). PyInstaller démarre en version 6.22.3. Qt volontairement différé. Inventaire initial dans `THIRD_PARTY_NOTICES.md` ; audit du paquet et notices natives MuPDF à compléter avant distribution. Python 3.12.0 est ancien : demander une décision sur sa mise à jour avant de traiter des documents non fiables ; les tests actuels sont exclusivement synthétiques. Aucun moteur de suppression ni export utilisateur n'est encore implémenté.
 
 ## 6. Phase 1 — Prototype PDF et décision de faisabilité
 
@@ -234,7 +236,7 @@ Installation reproductible dans un environnement neuf ; imports des composants r
 
 | Phase | État | Vérifications effectuées / résultats | Limites ou prochaine action |
 | --- | --- | --- | --- |
-| 0 — Préparation | À faire | — | Confirmer copyright avant publication |
+| 0 — Préparation | Terminée | Installation neuve reproduite ; 2 tests réussis dans chaque environnement ; `pip check` réussi ; PyInstaller 6.22.3 démarre | Girard Florian confirmé ; décider de la mise à jour de Python 3.12.0 ; audit des notices du paquet avant distribution |
 | 1 — Prototype PDF | À faire | — | Jalon bloquant avant interface complète |
 | 2 — Moteur et session | À faire | — | — |
 | 3 — Lecteur et zones | À faire | — | — |

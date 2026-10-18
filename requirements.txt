@@ -1,0 +1,3 @@
+# Moteur du prototype ; PySide6 sera ajouté au premier besoin d'interface.
+PyMuPDF==1.28.2
+Pillow==13.0.0
