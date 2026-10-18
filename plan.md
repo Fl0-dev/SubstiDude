@@ -9,9 +9,9 @@
 5. Si le prototype invalide le choix du moteur ou impose de réduire le périmètre, expliquer le blocage et demander une décision avant de poursuivre l'interface.
 6. `spec.md` fait référence pour les exigences ; ce plan organise leur réalisation, avec les arbitrages utilisateur consignés ci-dessous. Les références A1 à A14, y compris A4b, désignent ses critères d'acceptation.
 7. Ne pas créer d'infrastructure anticipée : ni serveur, ni base de données, ni plugins, ni abstraction de moteur interchangeable.
-8. Commit et push uniquement sur demande explicite de l'utilisateur ; messages au format Conventional Commits.
+8. L'utilisateur autorise un commit Conventional Commit par étape vérifiée : tests réussis et aucun défaut connu dans le périmètre de l'étape. Ne pas pousser sans demande explicite. Implémenter pas à pas ; demander plutôt que deviner lorsqu'un arbitrage est nécessaire.
 
-**État initial attendu :** dépôt contenant les spécifications et ce plan, sans application implémentée. Vérifier l'état réel au démarrage plutôt que supposer qu'il est inchangé.
+**État initial historique :** dépôt contenant seulement les spécifications et ce plan. Cet état est dépassé : un prototype existe désormais. Pour reprendre, utiliser l'état courant en section 13 et vérifier le dépôt avant toute modification.
 
 ### Arbitrages utilisateur applicables
 
@@ -37,7 +37,7 @@
 
 Cette cible suit la recommandation discutée. Le moteur reste conditionné au prototype. Vérifier les API et licences des versions effectivement installées ; ne pas copier des options de caviardisation supposées ou obsolètes.
 
-Épingler les versions testées pour l'exécution et la construction. Aucune dépendance HTTP, télémétrie, OCR ou IA n'est nécessaire. Les outils d'inspection indépendants sont des outils de développement, pas des dépendances obligatoires de l'application livrée.
+Épingler les versions testées pour l'exécution et la construction. Aucune dépendance HTTP, télémétrie, OCR ou IA n'est nécessaire. PDFium est réservé au développement ; pikepdf/qpdf est désormais une dépendance livrée pour l'inspection et le nettoyage, conformément à l'arbitrage utilisateur.
 
 ## 3. Structure minimale visée
 
@@ -130,7 +130,7 @@ Installation reproductible dans un environnement neuf ; imports des composants r
 
 ### 1C. Inspection indépendante et jalon
 
-- [x] Choisir un outil indépendant du moteur : pypdfium2/PDFium pour rendu/extraction et pikepdf/qpdf pour inspection structurelle et récupération des images, autorisés par l'utilisateur. Versions et licences vérifiées ; dépendances de développement uniquement.
+- [x] Choisir les lecteurs de contrôle : pypdfium2/PDFium pour rendu/extraction, pikepdf/qpdf pour structure/images des sorties MuPDF, et MuPDF comme second lecteur après réécriture qpdf. Versions et licences vérifiées ; seul PDFium reste exclusivement en développement. Un contrôle qpdf de sa propre sortie n'est pas une inspection indépendante.
 - [ ] Examiner texte, images récupérables, structures auxiliaires et anciennes révisions, pas seulement le rendu ou une recherche brute dans les octets.
 - [ ] Comparer les rendus hors zones, les dimensions d'images, le texte conservé et l'intégrité du source.
 - [ ] Ajouter dans ce plan une matrice « structure / critère de reconnaissance / support ou refus / contrôle automatique à chaque génération / preuve sur corpus » et les limites exactes du prototype.
@@ -248,7 +248,75 @@ Installation reproductible dans un environnement neuf ; imports des composants r
 | 6 — Qualification | À faire | — | — |
 | 7 — Distribution | À faire | — | — |
 
-### Instruction de lancement pour la prochaine session
+### État de reprise faisant foi
+
+**Point d'arrêt : phase 1, après l'étape 7. Dernier commit d'implémentation : `8d5fcb6`.** La phase 0 est terminée ; le jalon moteur de phase 1 n'est **pas** validé. Les phases 2 à 7 restent à faire. Des commits locaux ne sont pas poussés : vérifier `git status` et `git log`, ne pas les réécrire ni les pousser sans demande.
+
+**Il n'y a pas encore d'application lançable :** pas de `__main__.py`, pas d'interface Qt, pas de pipeline complet de substitutions, pas de modèle de révisions/confirmation, pas de worker ni d'export utilisateur. `python -m substidude` ne constitue donc pas une commande disponible. Ne pas annoncer les sorties expérimentales comme sûres pour des documents clients.
+
+#### Code à réutiliser avant d'écrire
+
+| Fichier / élément | État actuel |
+| --- | --- |
+| `substidude/pdf_engine.py` — `open_pdf(path)` | Lit une copie mémoire, vérifie les quotas, inspecte avec qpdf puis ouvre avec MuPDF ; l'appelant ferme le document retourné. Refuse les structures non maîtrisées. |
+| `page_to_view_matrix(page, scale)` | Coordonnées canoniques : points non tournés relatifs à la CropBox. La matrice applique rotation et échelle zoom × HiDPI ; `~matrix` donne l'inverse. Ne pas stocker les coordonnées écran. |
+| `repeated_image_occurrences(document)` | Regroupe les occurrences visibles aux pixels identiques ; objets partagés ou distincts, réencodage et Form imbriqués testés. Analyse à faire sur l'original avant transformation. |
+| `check_image_reuse(document, page_number, rectangle)` | Refuse pour l'instant toute modification locale touchant une image répétée. Ce contrôle seul ne valide pas la sécurité du reste du PDF. |
+| `sanitize_pdf(data)` | Nettoie Info du trailer **et** du catalogue, XMP et miniatures ; réécrit sans anciennes révisions et régénère les identifiants. Ne remplace aucun texte/pixel et ne constitue pas un export confirmé. |
+| `tests/fixtures.py` | Générateurs synthétiques : quatre contenus de base, quotas, rotations/recadrages, images répétées, contenus auxiliaires et révisions incrémentales. Réutiliser ces fixtures plutôt que les recréer. |
+| `tests/test_engine.py` — `NativeExperimentTests.replace_native` | Preuve de transformation native sur fixture connue ; pas une fonction applicative prenant des substitutions utilisateur. |
+| `tests/test_raster.py` — `replace_scan` | Preuve raster/OCR/mixte sur fixture connue ; image simple sans masque ni cisaillement, à 2 px/point. Marge interne de 2 pixels validée seulement à cette échelle : ne pas la généraliser sans test. |
+| `tests/test_independent.py`, `tests/test_auxiliary.py` | Contrôles croisés qpdf/MuPDF/PDFium, pixels/rendu/texte, anciennes révisions, refus et erreurs injectées. |
+| `tests/test_repeated_images.py`, `tests/test_setup.py` | Contrôles des répétitions, quotas liés et ressources/licences/police. |
+| `substidude/resources/` | Noto Sans Regular et licence OFL déjà embarquées ; ne pas ajouter une autre police sans nécessité. |
+
+Les aides internes `_check_file_size`, `_check_image_dimensions` et l'inspection structurée existent déjà dans `pdf_engine.py`. Ne pas dupliquer ces contrôles dans chaque futur appelant. Le copyright confirmé est **Girard Florian**, année 2026 ; conserver les mentions SPDX AGPL-3.0-only.
+
+#### Vérification de départ de la prochaine session
+
+Depuis la racine, dans PowerShell :
+
+```powershell
+git status --short --branch
+git log -8 --oneline
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+**Référence au point d'arrêt : 43 tests réussis**, aucun ignoré ni avertissement, dans `.venv` et `.venv-check`. `pip check` réussit aussi dans `.venv-runtime`, créé neuf depuis les seules dépendances d'exécution ; ouverture et nettoyage OCR synthétique vérifiés sans PDFium. Ces résultats doivent être réexécutés, pas supposés encore vrais.
+
+Si l'environnement n'existe pas :
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --only-binary=:all: -r requirements-dev.txt
+```
+
+Les versions exactes font référence dans `requirements.txt` et `requirements-dev.txt`. Python 3.12.0 64 bits est accepté sur ce poste pour les documents **synthétiques seulement** ; ne pas mettre Python système à jour sans accord. `pdftotext` Xpdf 4.00 est un contrôle textuel facultatif déjà disponible sur ce poste ; les tests correspondants sont ignorés s'il manque. Ne pas le confondre avec Poppler ni annoncer une recette complète si des tests sont ignorés.
+
+#### Prochaine étape concrète : classification des zones, toujours en phase 1
+
+1. Lire les expériences native/raster et les contrôles existants. Définir une inspection par **zone**, sur l'original, qui reconnaît les cas démontrés : texte natif, scan simple, scan avec OCR invisible et zones distinctes d'une page mixte. La présence de texte extractible ne suffit pas à choisir un mode.
+2. Ajouter les tests de reconnaissance et de refus avant de relier la transformation : superpositions ambiguës, vecteurs traversants, transparence/masques, transformations image non maîtrisées et sélections hors limites. Réutiliser les conversions existantes ; ne pas deviner un mode par défaut.
+3. Assembler ensuite un parcours **expérimental testable sans interface** : inspection de toutes les zones → contrôles de répétition et d'interaction → suppression de tous les contenus ciblés → insertion des remplacements → nettoyage → contrôles sur les octets finaux. Partir de l'original à chaque essai ; préserver le texte OCR hors zone et ne pas créer de texte PDF de remplacement raster.
+4. Tester plusieurs substitutions sur une même image/page et sur plusieurs pages, les chevauchements et deux zones disjointes touchant un même objet. Ne pas supposer l'indépendance de deux rectangles disjoints. Vérifier le rendu final complet avec les lecteurs de contrôle, pas seulement chaque opération isolée.
+5. Compléter le corpus restant, la matrice support/refus et les plafonds de rendu/mémoire/durée, puis la décision d'exécution et le test Windows gelé de la section 1D. Les quotas d'entrée et le plafond de **40 MP par image** sont décidés ; les seuils de rendu, mémoire globale et durée ne le sont pas. Demander un arbitrage si les mesures imposent une nouvelle limite d'usage ou une réduction des garanties.
+
+Ne pas passer à l'interface complète ni déclarer la phase 1 terminée après la seule réussite d'un parcours simple. La phase 2 consolidera ensuite le moteur applicatif et l'état de session, une fois le jalon de faisabilité satisfait.
+
+#### Limites et décisions encore ouvertes
+
+- `ActualText`, contenus balisés/accessibilité, couches, champs/signatures, annotations/liens, pièces jointes, actions, signets/destinations, polices Type 3, images alternatives, objets PostScript et extensions inconnues du catalogue sont actuellement **refusés**, pas nettoyés ni aplatis. Leur reconnaissance/refus est déjà testée : ne pas désactiver ces garde-fous pour faire passer un exemple.
+- Les répétitions exactes sont démontrées dans le périmètre visible sans masque et avec un seul espace couleur gris/RGB. Les copies recadrées, rééchantillonnées ou dont les pixels diffèrent ne bénéficient pas d'une détection générale. La qualification des représentations cachées et des garanties de suppression reste à terminer ; demander une décision si cette frontière compromet la spec.
+- Les masques et espaces couleur mélangés sont refusés par le contrôle de répétition. Le remplacement simultané de toutes les occurrences d'une image répétée n'est pas implémenté ; aucune propagation automatique autorisée.
+- Pas encore de reconnaissance complète des structures prises en charge, de pipeline multi-zones, de limites globales de ressources, de processus de traitement validé ni de test PyInstaller gelé. PyInstaller est installé et démarre, cela ne vaut pas test du paquet.
+- Corpus encore incomplet : vecteurs traversants, interactions entre zones, autres transformations/échelles, limites de copie et cas signé à qualifier. Certaines tâches regroupées restent volontairement ouvertes malgré des sous-cas déjà couverts.
+- Les contrôles du corpus ne prouvent pas l'anonymisation de tout PDF utilisateur. La confirmation humaine ne devra jamais contourner un échec technique. Pas de documents clients tant que le prototype et l'environnement ne sont pas qualifiés.
+- Licences : pikepdf/qpdf et ses dépendances sont autorisés à l'exécution ; PDFium reste hors distribution. Notices et accès aux sources exactes, obligations natives et Qt devront être vérifiés sur le paquet final.
+
+### Historique des étapes du prototype
+
+Les paragraphes suivants décrivent les résultats **au moment de chaque étape** ; leurs anciennes limites et rôles de dépendances sont remplacés par l'état de reprise et les arbitrages ci-dessus.
 
 **Reprise après l'étape 1 du prototype :** `tests/fixtures.py` génère en mémoire les quatre contenus de base, des multipages et des pages tournées/recadrées. Les tests prouvent la présence des marqueurs, l'identité du rendu scan/scan+OCR, le caractère invisible de l'OCR et les dimensions tournées/recadrées ; ils ne prouvent pas encore une suppression. `open_pdf` refuse les tailles hors limites avant parsing, borne aussi la lecture en cas de croissance du fichier, contrôle 1 à 49 pages, refuse les PDF chiffrés (même sans mot de passe d'ouverture), les fichiers d'un autre format et les PDF réparés par le moteur. Le source est lu en mémoire et reste inchangé. Les diagnostics natifs ne sont pas affichés pour éviter des fragments documentaires dans les journaux. Les cas d'images partagées, objets auxiliaires, coordonnées de sélection et suppression restent à développer. Python 3.12.0 est autorisé pour ce corpus synthétique seulement. Aucun export utilisateur ni contrôle de sûreté général n'existe à ce stade.
 
@@ -266,4 +334,6 @@ Installation reproductible dans un environnement neuf ; imports des composants r
 
 Validation finale de l'étape 7 : 43 tests réussis dans `.venv` et `.venv-check`, sans test ignoré ni avertissement ; `pip check` réussi dans ces deux environnements et dans `.venv-runtime`. Ce dernier a été créé neuf depuis `requirements.txt` uniquement ; ouverture et nettoyage OCR synthétique réussis, absence de PDFium vérifiée. Les tests couvrent aussi le refus des extensions inconnues du catalogue, objets PostScript et images alternatives. La liste positive du catalogue inclut explicitement `Info`, présent à cet emplacement dans certaines sources du corpus : ce conteneur est supprimé en plus de l'Info du trailer, et sa disparition est vérifiée. L'inventaire des licences et les instructions reflètent le nouveau rôle de pikepdf ; sources et notices complètes des bibliothèques natives restent à joindre lors du conditionnement. Les refus sont conservateurs : pas de support général des PDF balisés ni d'aplatissement de champs/annotations annoncé.
 
-> Lis `spec.md` et `plan.md`, examine le dépôt, puis reprends à la première tâche non terminée en tenant compte des notes de reprise. Implémente et teste progressivement. Ne développe pas l'interface complète avant validation du moteur. Refuse explicitement les traitements non sûrs et demande un arbitrage plutôt que deviner. Mets à jour le suivi de reprise sans inclure de données confidentielles. L'utilisateur autorise un commit Conventional Commit par étape vérifiée et sans défaut connu ; ne pousse que sur demande explicite.
+### Consigne prête à copier dans une nouvelle session
+
+> Lis intégralement `spec.md` et `plan.md`, notamment l'« État de reprise faisant foi » en section 13. Vérifie Git et réexécute les tests : référence actuelle, 43 tests réussis. Reprends la phase 1 par la classification des zones, puis le pipeline expérimental multi-zones ; réutilise les fonctions et fixtures existantes. Le dernier commit d'implémentation au point de reprise est `8d5fcb6`. Il n'existe pas encore d'interface ni d'export utilisateur et le jalon moteur n'est pas validé. Travaille uniquement sur des documents synthétiques, pas à pas ; demande plutôt que deviner et sollicite tout arbitrage nécessaire. Préserve les refus de sécurité, les quotas, l'original et les notices de licence. Un commit Conventional Commit par étape vérifiée est autorisé si les tests passent et qu'aucun défaut n'est connu ; ne pousse pas sans demande explicite. Mets à jour ce plan avec les résultats et limites, sans données confidentielles. Ne construis pas l'interface complète avant validation du moteur.
