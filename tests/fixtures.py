@@ -5,6 +5,9 @@
 
 from io import BytesIO
 from pathlib import Path
+import shutil
+import subprocess
+import tempfile
 
 import pymupdf
 from PIL import Image, ImageDraw, ImageFont
@@ -14,6 +17,17 @@ FONT = Path(__file__).resolve().parents[1] / "substidude/resources/NotoSans-Regu
 TARGET = "SECRET-CIBLE-123"
 KEPT = "TEMOIN-CONSERVE-456"
 TARGET_RECT = (35, 70, 260, 105)
+
+
+def extract_with_pdftotext(data):
+    with tempfile.TemporaryDirectory(prefix="substidude-test-") as directory:
+        path = Path(directory) / "synthetic.pdf"
+        path.write_bytes(data)
+        completed = subprocess.run(
+            [shutil.which("pdftotext"), "-enc", "UTF-8", str(path), "-"],
+            capture_output=True, check=True, timeout=15,
+        )
+        return completed.stdout.decode("utf-8")
 
 
 def scan_image(height=800):

@@ -32,6 +32,9 @@ Une expérience automatisée de suppression native vérifie le remplacement acce
 les rotations/recadrages et l'absence de différences de rendu hors zone. Si
 `pdftotext` est installé, un test indépendant contrôle aussi le texte extrait ;
 sinon ce test est signalé comme ignoré, pas comme une qualification réussie.
+Les expériences scan/OCR modifient les pixels sans perte supplémentaire et
+vérifient la disparition du texte OCR ciblé sans ajout de texte PDF fictif.
+Le contrôle indépendant des images et structures PDF reste à réaliser.
 
 ## Limites décidées
 

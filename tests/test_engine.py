@@ -3,7 +3,6 @@
 
 import hashlib
 import shutil
-import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -11,7 +10,10 @@ from unittest.mock import patch
 
 import pymupdf
 
-from fixtures import FONT, KEPT, TARGET, TARGET_RECT, image_dimensions_pdf, make_pdf, zero_page_pdf
+from fixtures import (
+    FONT, KEPT, TARGET, TARGET_RECT, extract_with_pdftotext,
+    image_dimensions_pdf, make_pdf, zero_page_pdf,
+)
 from substidude.pdf_engine import (
     MAX_FILE_BYTES, PDFError, _check_image_dimensions, open_pdf, page_to_view_matrix,
 )
@@ -239,19 +241,12 @@ class NativeExperimentTests(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("pdftotext"), "Inspection indépendante : pdftotext absent")
     def test_independent_text_extraction(self):
-        with tempfile.TemporaryDirectory(prefix="substidude-test-") as directory:
-            source, result, _, _ = self.replace_native(cropped=True, rotation=90)
-            extracted = []
-            for name, data in (("source.pdf", source), ("result.pdf", result)):
-                path = Path(directory) / name
-                path.write_bytes(data)
-                command = [shutil.which("pdftotext"), "-enc", "UTF-8", str(path), "-"]
-                completed = subprocess.run(command, capture_output=True, check=True, timeout=15)
-                extracted.append(completed.stdout.decode("utf-8"))
-            self.assertIn(TARGET, extracted[0])
-            self.assertNotIn(TARGET, extracted[1])
-            self.assertIn(KEPT, extracted[1])
-            self.assertIn("Société Élodie", extracted[1])
+        source, result, _, _ = self.replace_native(cropped=True, rotation=90)
+        self.assertIn(TARGET, extract_with_pdftotext(source))
+        text = extract_with_pdftotext(result)
+        self.assertNotIn(TARGET, text)
+        self.assertIn(KEPT, text)
+        self.assertIn("Société Élodie", text)
 
 
 if __name__ == "__main__":
