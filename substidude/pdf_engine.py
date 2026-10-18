@@ -4,6 +4,7 @@
 """Ouverture bornée du prototype ; aucune garantie de suppression à ce stade."""
 
 from pathlib import Path
+from math import isfinite
 
 import pymupdf
 
@@ -19,6 +20,27 @@ MAX_IMAGE_PIXELS = 40_000_000
 
 class PDFError(ValueError):
     """Erreur présentable sans contenu documentaire ni chemin source."""
+
+
+def page_to_view_matrix(page: pymupdf.Page, scale: float) -> pymupdf.Matrix:
+    """Page non tournée, relative à la CropBox → vue tournée, en pixels.
+
+    `scale` inclut le zoom et le facteur HiDPI ; l'inverse s'obtient par `~matrix`.
+    Les décalages de fenêtre et de défilement relèvent de la vue, pas du PDF.
+    """
+    if not isfinite(scale) or scale <= 0:
+        raise PDFError("Le facteur d'affichage doit être positif et fini.")
+    try:
+        matrix = page.rotation_matrix * pymupdf.Matrix(scale, scale)
+    except (TypeError, OverflowError):
+        raise PDFError("Le facteur d'affichage dépasse la précision du moteur.") from None
+    # MuPDF représente les matrices en précision finie ; refuser un inverse inutilisable.
+    inverse = pymupdf.Matrix()
+    if (not all(isfinite(value) for value in matrix)
+            or inverse.invert(matrix) != 0
+            or not all(isfinite(value) for value in inverse)):
+        raise PDFError("Le facteur d'affichage ne permet pas une conversion fiable.")
+    return matrix
 
 
 def _check_image_dimensions(width: int, height: int) -> None:

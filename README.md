@@ -28,6 +28,10 @@ avec refus des fichiers chiffrés, invalides ou réparés par le moteur. Le corp
 couvre les contenus natifs, scans, scans avec OCR invisible et pages mixtes,
 ainsi que les rotations et le recadrage. L'ouverture ne signifie pas que le
 contenu est pris en charge pour une suppression : cette validation reste à faire.
+Une expérience automatisée de suppression native vérifie le remplacement accentué,
+les rotations/recadrages et l'absence de différences de rendu hors zone. Si
+`pdftotext` est installé, un test indépendant contrôle aussi le texte extrait ;
+sinon ce test est signalé comme ignoré, pas comme une qualification réussie.
 
 ## Limites décidées
 
