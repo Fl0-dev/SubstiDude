@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 
 import pymupdf
+import pikepdf
 from PIL import Image, ImageDraw, ImageFont
 
 
@@ -146,3 +147,112 @@ def repeated_images_pdf(*, separate_objects=False, reencoded=False, nested=False
                     outer.show_pdf_page(outer.rect, document, number)
                 return wrapper.tobytes(garbage=0, deflate=False)
         return document.tobytes(garbage=0, deflate=False)
+
+
+AUXILIARY_MARKER = "SECRET-AUXILIAIRE-789"
+
+
+def auxiliary_pdf(feature, *, nested=False):
+    with pikepdf.Pdf.open(BytesIO(make_pdf())) as document:
+        page = document.pages[0]
+        if feature in {"actualtext", "escaped-actualtext"}:
+            key = b"/ActualText" if feature == "actualtext" else b"/#41ctualText"
+            content = b"\n".join(stream.read_bytes() for stream in page.obj.Contents)
+            page.obj.Contents = document.make_stream(
+                b"/Span << " + key + b" (" + AUXILIARY_MARKER.encode() + b") >> BDC\n"
+                + content + b"\nEMC"
+            )
+        elif feature == "properties":
+            page.obj.Resources.Properties = pikepdf.Dictionary(
+                P=pikepdf.Dictionary(ActualText=AUXILIARY_MARKER)
+            )
+        elif feature == "metadata":
+            document.docinfo.Title = AUXILIARY_MARKER
+            document.Root.Info = pikepdf.Dictionary(Title=AUXILIARY_MARKER + "-CATALOG")
+            with document.open_metadata(set_pikepdf_as_editor=False) as metadata:
+                metadata["dc:description"] = AUXILIARY_MARKER
+            # Une deuxième référence XMP sur la page, pas seulement dans le catalogue.
+            page.obj.Metadata = document.Root.Metadata
+        elif feature == "thumbnail":
+            image = document.make_stream(b"\xff\xff\xff" * 4)
+            image.Type, image.Subtype = pikepdf.Name.XObject, pikepdf.Name.Image
+            image.Width, image.Height = 2, 2
+            image.BitsPerComponent, image.ColorSpace = 8, pikepdf.Name.DeviceRGB
+            page.obj.Thumb = image
+        elif feature == "annotation":
+            page.obj.Annots = pikepdf.Array([document.make_indirect(pikepdf.Dictionary(
+                Type=pikepdf.Name.Annot, Subtype=pikepdf.Name.Text,
+                Rect=[20, 20, 40, 40], Contents=AUXILIARY_MARKER,
+            ))])
+        elif feature == "form":
+            document.Root.AcroForm = pikepdf.Dictionary(Fields=[document.make_indirect(
+                pikepdf.Dictionary(FT=pikepdf.Name.Tx, T="synthetic", V=AUXILIARY_MARKER)
+            )])
+        elif feature == "attachment":
+            document.attachments["synthetic.txt"] = pikepdf.AttachedFileSpec(
+                document, AUXILIARY_MARKER.encode(), filename="synthetic.txt"
+            )
+        elif feature == "action":
+            document.Root.OpenAction = pikepdf.Dictionary(S=pikepdf.Name.JavaScript, JS=AUXILIARY_MARKER)
+        elif feature == "layer":
+            group = document.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.OCG, Name=AUXILIARY_MARKER))
+            document.Root.OCProperties = pikepdf.Dictionary(OCGs=[group], D=pikepdf.Dictionary(OFF=[group]))
+        elif feature == "structure":
+            document.Root.StructTreeRoot = pikepdf.Dictionary(Type=pikepdf.Name.StructTreeRoot)
+        elif feature == "destination":
+            document.Root.Names = pikepdf.Dictionary(Dests=pikepdf.Dictionary(
+                Names=[AUXILIARY_MARKER, pikepdf.Array([page.obj, pikepdf.Name.Fit])]
+            ))
+        elif feature == "type3":
+            page.obj.Resources.Font.SyntheticType3 = document.make_indirect(pikepdf.Dictionary(
+                Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type3,
+                FontBBox=[0, 0, 1000, 1000], FontMatrix=[0.001, 0, 0, 0.001, 0, 0],
+                CharProcs=pikepdf.Dictionary(A=document.make_stream(b"1000 0 d0")),
+                Encoding=pikepdf.Dictionary(Type=pikepdf.Name.Encoding, Differences=[65, pikepdf.Name.A]),
+                FirstChar=65, LastChar=65, Widths=[1000], Resources=pikepdf.Dictionary(),
+            ))
+        elif feature == "ambiguous-metadata":
+            page.obj.Metadata = pikepdf.Dictionary(Private=AUXILIARY_MARKER)
+        elif feature == "unknown-root":
+            document.Root.Unqualified = pikepdf.Dictionary(Contents=AUXILIARY_MARKER)
+        elif feature == "postscript":
+            stream = document.make_stream(b"%!\n")
+            stream.Type, stream.Subtype = pikepdf.Name.XObject, pikepdf.Name.PS
+            page.obj.Resources.XObject = pikepdf.Dictionary(Synthetic=stream)
+        elif feature == "alternate-image":
+            images = []
+            for color in (b"\xff\xff\xff", b"\x00\x00\x00"):
+                image = document.make_stream(color)
+                image.Type, image.Subtype = pikepdf.Name.XObject, pikepdf.Name.Image
+                image.Width, image.Height = 1, 1
+                image.BitsPerComponent, image.ColorSpace = 8, pikepdf.Name.DeviceRGB
+                images.append(image)
+            images[0].Alternates = [pikepdf.Dictionary(Image=images[1], DefaultForPrinting=True)]
+            page.obj.Resources.XObject = pikepdf.Dictionary(Synthetic=images[0])
+        else:
+            raise ValueError("Contenu auxiliaire synthétique inconnu")
+        if nested:
+            content = b"\n".join(s.read_bytes() for s in page.obj.Contents) if isinstance(
+                page.obj.Contents, pikepdf.Array
+            ) else page.obj.Contents.read_bytes()
+            form = document.make_stream(content)
+            form.Type, form.Subtype = pikepdf.Name.XObject, pikepdf.Name.Form
+            form.BBox, form.Resources = [0, 0, 300, 400], page.obj.Resources
+            page.obj.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm=form))
+            page.obj.Contents = document.make_stream(b"/Fm Do")
+        output = BytesIO()
+        document.save(output)
+        return output.getvalue()
+
+
+def incremental_pdf():
+    with tempfile.TemporaryDirectory(prefix="substidude-test-") as directory:
+        path = Path(directory) / "synthetic.pdf"
+        with pymupdf.open(stream=make_pdf()) as document:
+            document.set_metadata({"title": AUXILIARY_MARKER + "-OLD"})
+            document.save(path)
+        previous = path.read_bytes()
+        with pymupdf.open(path) as document:
+            document.set_metadata({"title": AUXILIARY_MARKER + "-CURRENT"})
+            document.saveIncr()
+        return previous, path.read_bytes()

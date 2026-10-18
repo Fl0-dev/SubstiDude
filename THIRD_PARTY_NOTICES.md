@@ -12,6 +12,10 @@ distribué à cette étape. Les mentions des auteurs et textes de licence doiven
 | Python | 3.12.0, 64 bits | PSF et licences historiques, `C:\Python312\LICENSE.txt` sur le poste de préparation ; utiliser une version corrective à jour avant documents non fiables. |
 | PyMuPDF / MuPDF | 1.28.2 / 1.28.2 | Option GNU AGPLv3 retenue, pas de licence commerciale. Métadonnées et `pymupdf-1.28.2.dist-info/COPYING` ; ce dernier ne contient qu'une déclaration de double licence. |
 | Pillow | 13.0.0 | MIT-CMU et notices des bibliothèques embarquées, `pillow-13.0.0.dist-info/licenses/LICENSE`. |
+| pikepdf | 10.17.0 | MPL-2.0 ; `pikepdf-10.17.0.dist-info/licenses/LICENSE.txt` et notices sous `third-party-licenses/`. |
+| qpdf, inclus dans pikepdf | 12.4.2 | Apache-2.0 ; `third-party-licenses/qpdf.txt` dans les notices de pikepdf. |
+| lxml, dépendance de pikepdf | 6.1.3 | BSD-3-Clause et exceptions ; textes `lxml-6.1.3.dist-info/licenses/LICENSE.txt` et `LICENSES.txt`, y compris les bibliothèques natives de la roue. |
+| packaging, dépendance de pikepdf | 26.3 | Apache-2.0 OU BSD-2-Clause ; `packaging-26.3.dist-info/licenses/LICENSE*`. |
 | Noto Sans Regular | Fichier TTF versionné dans les ressources | Copyright 2018 The Noto Project Authors ; SIL OFL 1.1, texte intégral dans `substidude/resources/OFL.txt`. Redistribution et intégration autorisées sous ses conditions. |
 | PySide6 / Qt | Non installés à cette étape | À inventorier lors de leur ajout : versions, modules, notices et obligations LGPL des composants réellement livrés. |
 
@@ -38,7 +42,6 @@ les versions annoncées à l'exécution peuvent différer des titres de la notic
 | --- | --- | --- |
 | PyInstaller | 6.22.3 | GPLv2 ou ultérieure avec exception de distribution du programme construit ; `licenses/COPYING.txt`. |
 | altgraph | 0.17.5 | MIT ; `LICENSE`. |
-| packaging | 26.3 | Apache-2.0 OU BSD-2-Clause ; `licenses/LICENSE*`. |
 | pefile | 2024.8.26 | MIT ; `LICENSE`. |
 | pyinstaller-hooks-contrib | 2026.8 | GPL-2.0-or-later pour les hooks standard, conditions distinctes pour les hooks d'exécution ; conserver `licenses/LICENSE` intégralement. |
 | pywin32-ctypes | 0.2.3 | BSD-3-Clause ; `LICENSE.txt`. |
@@ -51,21 +54,33 @@ l'interpréteur et les bibliothèques réellement embarqués, joindre leurs text
 et fournir les sources correspondantes exigées par leurs licences. Ne pas
 annoncer cet audit de distribution comme terminé avant le conditionnement.
 
-## Inspection indépendante — développement seulement
+## Rendu indépendant — développement seulement
 
 Ajout autorisé par l'utilisateur. Ces composants ne figurent pas dans
 `requirements.txt` et ne doivent pas être embarqués dans l'application.
 
 | Composant | Version testée | Licence / notices de la roue installée |
 | --- | --- | --- |
-| pikepdf | 10.17.0 | MPL-2.0, `pikepdf-10.17.0.dist-info/licenses/LICENSE.txt` ; notices sous `third-party-licenses/`. |
-| qpdf, inclus dans pikepdf | 12.4.2 | Apache-2.0, `third-party-licenses/qpdf.txt` dans les notices de pikepdf. |
 | pypdfium2 | 5.14.0 | Apache-2.0 / BSD-3-Clause selon les fichiers, textes dans `pypdfium2-5.14.0.dist-info/licenses/LICENSES/`. |
 | PDFium, inclus dans pypdfium2 | 156.0.8076.0 | Licence BSD à 3 clauses des auteurs PDFium et notices des dépendances dans `licenses/data/windows_x64/BUILD_LICENSES/`. |
-| lxml, dépendance de pikepdf | 6.1.3 | BSD-3-Clause et exceptions ; conserver `lxml-6.1.3.dist-info/licenses/LICENSE.txt` et `LICENSES.txt`, notamment les notices libxml2, libxslt, iconv et zlib de la roue. |
 
 Sources amont : https://github.com/pikepdf/pikepdf,
 https://github.com/qpdf/qpdf, https://github.com/pypdfium2-team/pypdfium2,
 https://pdfium.googlesource.com/pdfium/ et https://github.com/lxml/lxml.
 Ces outils sont installés dans les environnements virtuels de développement,
 sans installation système ni téléchargement pendant les tests.
+
+## Évolution autorisée : pikepdf devient une dépendance livrée
+
+Après reproduction de données `ActualText` conservées par le nettoyage MuPDF,
+l'utilisateur a autorisé pikepdf/qpdf à l'exécution. `requirements.txt` épingle
+pikepdf, lxml et packaging ; PDFium reste exclusivement dans les dépendances de test.
+
+Avant distribution, joindre les licences et notices complètes de la roue pikepdf,
+de qpdf et de lxml, notamment les composants natifs recensés dans leurs notices.
+Pour la MPL-2.0, fournir un moyen d'obtenir les sources pikepdf correspondant
+exactement au binaire distribué, et les modifications éventuelles des fichiers
+couverts ; conserver ses mentions. La licence AGPL de SubstiDude ne remplace pas
+celles de ces composants. Inventorier le contenu réel du paquet PyInstaller et
+respecter aussi les obligations de ses dépendances natives (dont les éventuelles
+conditions LGPL), pas uniquement les licences principales.

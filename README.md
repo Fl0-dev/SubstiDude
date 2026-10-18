@@ -20,7 +20,8 @@ doivent fonctionner hors ligne. Qt sera installé lorsque le prototype l'exigera
 Utiliser une version corrective à jour de Python 3.12 pour le traitement de
 documents non fiables ; le poste de préparation dispose actuellement de 3.12.0.
 
-Les tests utilisent uniquement des données synthétiques générées en mémoire.
+Les tests utilisent uniquement des données synthétiques générées par le corpus ;
+les essais de fichiers et de révisions utilisent des répertoires temporaires nettoyés.
 Ne pas déposer de documents clients dans le dépôt, même à titre d'exemple.
 
 Le prototype sait ouvrir en mémoire les PDF respectant les limites ci-dessous,
@@ -34,17 +35,27 @@ les rotations/recadrages et l'absence de différences de rendu hors zone. Si
 sinon ce test est signalé comme ignoré, pas comme une qualification réussie.
 Les expériences scan/OCR modifient les pixels sans perte supplémentaire et
 vérifient la disparition du texte OCR ciblé sans ajout de texte PDF fictif.
-Les tests indépendants utilisent **pikepdf/qpdf** pour la structure et la récupération
-des images, et **pypdfium2/PDFium** pour le rendu et le texte. Ils sont installés
-uniquement par `requirements-dev.txt`, pas avec les dépendances d'exécution.
+**pikepdf/qpdf** est désormais une dépendance d'exécution pour l'inspection
+structurelle et le nettoyage, en complément de PyMuPDF. **pypdfium2/PDFium** reste
+réservé aux tests de rendu et d'extraction de texte ; il n'est pas livré dans l'application.
+Après une réécriture qpdf, les tests utilisent aussi MuPDF comme second lecteur.
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -p test_independent.py -v
 ```
 
 Ces contrôles couvrent les sorties simples du corpus et détectent une image
-originale résiduelle cachée ou inutilisée. Le nettoyage des contenus auxiliaires,
-des anciennes révisions et le traitement complet restent à qualifier.
+originale résiduelle cachée ou inutilisée. Le nettoyage retire les métadonnées
+documentaires/XMP et miniatures, régénère les identifiants et réécrit les révisions
+dans un nouveau PDF. Les tests contrôlent le rendu, le texte, les pixels des scans
+et l'absence de recompression JPEG. Ce nettoyage seul n'effectue aucune substitution.
+
+Le prototype refuse actuellement les textes alternatifs (`ActualText`, `Alt`),
+contenus balisés, couches, formulaires/signatures, annotations/liens, pièces jointes,
+scripts/actions, destinations nommées, signets et autres structures auxiliaires non
+maîtrisées. Ces refus ont lieu avant transformation, y compris dans les objets Form.
+Une référence XMP ambiguë ou un avertissement de parsing interdit le résultat.
+Le pipeline complet et son état de validation restent à construire.
 
 Le contrôle préalable des images réutilisées repère les occurrences visibles
 identiques, même avec des objets distincts, un encodage PDF différent ou des
