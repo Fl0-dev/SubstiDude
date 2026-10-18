@@ -44,7 +44,13 @@ uniquement par `requirements-dev.txt`, pas avec les dépendances d'exécution.
 
 Ces contrôles couvrent les sorties simples du corpus et détectent une image
 originale résiduelle cachée ou inutilisée. Le nettoyage des contenus auxiliaires,
-des anciennes révisions et le traitement des images partagées restent à qualifier.
+des anciennes révisions et le traitement complet restent à qualifier.
+
+Le contrôle préalable des images réutilisées repère les occurrences visibles
+identiques, même avec des objets distincts, un encodage PDF différent ou des
+objets imbriqués. Il refuse leur modification locale sans modifier le document.
+À ce stade, masques et mélanges d'espaces couleur sont refusés par ce contrôle ;
+les copies dont les pixels ont changé et les couches cachées restent à qualifier.
 
 ## Limites décidées
 

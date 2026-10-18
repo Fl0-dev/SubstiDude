@@ -67,6 +67,52 @@ def _check_images(document: pymupdf.Document) -> None:
             _check_image_dimensions(image["width"], image["height"])
 
 
+def repeated_image_occurrences(document: pymupdf.Document) -> list[list[tuple[int, pymupdf.Rect]]]:
+    """Groupes d'occurrences identiques sur l'original, avant toute transformation.
+
+    Prototype limité aux images visibles sans masque, dans un même espace couleur.
+    Ce résultat ne qualifie pas les couches masquées ni les contenus auxiliaires.
+    """
+    _check_images(document)
+    colorspaces = set()
+    for page in document:
+        for image in page.get_image_info(hashes=False, xrefs=False):
+            if image["has-mask"]:
+                raise PDFError("La détection des copies d'images avec masque n'est pas prise en charge.")
+            colorspaces.add((image["colorspace"], image["cs-name"]))
+    if len(colorspaces) > 1 or any(components not in (1, 3) for components, _ in colorspaces):
+        raise PDFError("La comparaison des images entre espaces couleur n'est pas prise en charge.")
+
+    groups = {}
+    for page in document:
+        for image in page.get_image_info(hashes=True, xrefs=False):
+            key = (image["width"], image["height"], image["cs-name"], image["digest"])
+            # L'empreinte native sert à refuser les répétitions, pas à certifier un export.
+            # Une collision ne ferait qu'ajouter un refus conservateur.
+            groups.setdefault(key, []).append((page.number, pymupdf.Rect(image["bbox"])))
+    return [occurrences for occurrences in groups.values() if len(occurrences) > 1]
+
+
+def check_image_reuse(document: pymupdf.Document, page_number: int, rectangle) -> None:
+    """Refuse une modification locale d'image réutilisée ; ne valide pas le reste du PDF."""
+    if not 0 <= page_number < document.page_count:
+        raise PDFError("La page sélectionnée n'existe pas.")
+    rect = pymupdf.Rect(rectangle)
+    page = document[page_number]
+    bounds = page.rect * page.derotation_matrix
+    if (not all(isfinite(value) for value in rect) or rect.is_empty
+            or not bounds.contains(rect)):
+        raise PDFError("La zone doit être non vide et entièrement dans la page.")
+    for occurrences in repeated_image_occurrences(document):
+        if any(number == page_number and area.intersects(rect) for number, area in occurrences):
+            pages = ", ".join(str(number + 1) for number in sorted({n for n, _ in occurrences}))
+            raise PDFError(
+                f"Une image de cette zone est réutilisée (pages {pages}). "
+                "Le remplacement local est refusé pour éviter une modification implicite "
+                "ou des pixels sensibles résiduels."
+            )
+
+
 def open_pdf(path: str | Path) -> pymupdf.Document:
     """Ouvre une copie mémoire ; l'appelant doit fermer le document retourné."""
     try:

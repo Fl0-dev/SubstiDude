@@ -115,3 +115,34 @@ def image_dimensions_pdf(width, height, *, inline=False, mask=False, nested=Fals
                 outer_page.show_pdf_page(outer_page.rect, document, 0)
                 return wrapper.tobytes(deflate=True)
         return document.tobytes(deflate=True)
+
+
+def repeated_images_pdf(*, separate_objects=False, reencoded=False, nested=False, same_page=False):
+    """Deux occurrences d'un scan ; objets distincts si demandé, sans dédoublonnage."""
+    first = scan_image()
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=800 if same_page else 400)
+        first_xref = page.insert_image((0, 0, 300, 400), stream=first)
+        if not same_page:
+            page = document.new_page(width=300, height=400)
+        rect = (0, 400, 300, 800) if same_page else (0, 0, 300, 400)
+        if separate_objects:
+            # Copier dans le même document pour conserver les références de profil couleur.
+            copied = document.get_new_xref()
+            document.update_object(copied, "<< >>")
+            document.xref_copy(first_xref, copied)
+            if reencoded:
+                raw = document.xref_stream(first_xref)
+                document.update_stream(copied, raw.hex().encode() + b">", compress=False)
+                document.xref_set_key(copied, "Filter", "/ASCIIHexDecode")
+            page.insert_image(rect, xref=copied)
+        else:
+            page.insert_image(rect, xref=first_xref)
+        if nested:
+            with pymupdf.open() as wrapper:
+                for number in range(document.page_count):
+                    size = document[number].rect
+                    outer = wrapper.new_page(width=size.width, height=size.height)
+                    outer.show_pdf_page(outer.rect, document, number)
+                return wrapper.tobytes(garbage=0, deflate=False)
+        return document.tobytes(garbage=0, deflate=False)
