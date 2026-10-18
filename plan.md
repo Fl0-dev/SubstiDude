@@ -18,6 +18,7 @@
 - **Entrées :** accepter uniquement les fichiers de taille strictement positive et strictement inférieure à 10 Mo (10 000 000 octets), contenant de 1 à 49 pages. Refuser notamment les fichiers de 0 octet, ceux de 10 Mo ou plus et les PDF de 0 ou d'au moins 50 pages.
 - **Temporaires :** conserver le traitement en mémoire autant que possible ; les temporaires d'export restent dans le dossier de destination. L'usage prévu est un dossier local non synchronisé. Cet arbitrage déroge à l'obligation de répertoire local dédié de `spec.md:6.3` ; il ne supprime pas les exigences de droits adaptés, de noms neutres et de nettoyage. Aucun mécanisme de détection de synchronisation n'est demandé.
 - **Périmètre PDF :** définir une liste positive de structures reconnues et traitables ; aucune promesse de support PDF général ni de détection de toutes les copies visuellement similaires d'une image. Si cette frontière ne permet pas de respecter les garanties de suppression de la spec, demander un arbitrage avant de poursuivre.
+- **Python :** l'utilisateur autorise la poursuite du prototype avec Python 3.12.0 sur documents synthétiques uniquement ; reporter la mise à jour avant les essais sur documents réels non fiables.
 
 ## 2. Cible technique retenue pour ce plan
 
@@ -103,7 +104,7 @@ Installation reproductible dans un environnement neuf ; imports des composants r
 
 ### 1A. Corpus synthétique
 
-- [ ] Générer un PDF natif, un scan sans OCR et un scan avec texte OCR invisible, avec marqueurs distincts et données fictives ; ajouter une page mixte avec zones natives et scannées distinctes, dont le traitement doit être accepté.
+- [x] Générer un PDF natif, un scan sans OCR et un scan avec texte OCR invisible, avec marqueurs distincts et données fictives ; ajouter une page mixte avec zones natives et scannées distinctes, dont le traitement doit être accepté.
 - [ ] Ajouter des cas multipages, rotations 0/90/180/270°, CropBox décalée et dimensions différentes.
 - [ ] Ajouter une image partagée entre pages, une copie d'image distincte avec les mêmes pixels, transparence/masque et contenu vectoriel traversant une zone.
 - [ ] Ajouter deux zones disjointes touchant un même objet textuel, vectoriel ou image ; vérifier un traitement cohérent ou un refus explicite, sans modification silencieuse hors des effets annoncés dans l'aperçu.
@@ -111,7 +112,7 @@ Installation reproductible dans un environnement neuf ; imports des composants r
 - [ ] Ajouter métadonnées/XMP, annotation, formulaire, pièce jointe, action/lien, `ActualText`, couches optionnelles et révisions incrémentales.
 - [ ] Ajouter fichiers invalides et chiffrés ; préparer un cas signé synthétique ou une vérification manuelle documentée si sa génération nécessite un outil supplémentaire.
 - [ ] Définir pour chaque cas le résultat attendu et le critère permettant de le reconnaître : support ou refus motivé. Les trois types principaux et au moins une page mixte doivent être supportés pour valider la V1.
-- [ ] Tester les frontières d'entrée : 0, 1, 9 999 999 et 10 000 000 octets pour le contrôle de taille ; 0, 1, 49 et 50 pages pour le contrôle du nombre de pages. Une taille admissible ne dispense pas de vérifier la validité du PDF.
+- [x] Tester les frontières d'entrée : 0, 1, 9 999 999 et 10 000 000 octets pour le contrôle de taille ; 0, 1, 49 et 50 pages pour le contrôle du nombre de pages. Une taille admissible ne dispense pas de vérifier la validité du PDF.
 
 ### 1B. Expériences moteur
 
@@ -236,8 +237,8 @@ Installation reproductible dans un environnement neuf ; imports des composants r
 
 | Phase | État | Vérifications effectuées / résultats | Limites ou prochaine action |
 | --- | --- | --- | --- |
-| 0 — Préparation | Terminée | Installation neuve reproduite ; 2 tests réussis dans chaque environnement ; `pip check` réussi ; PyInstaller 6.22.3 démarre | Girard Florian confirmé ; décider de la mise à jour de Python 3.12.0 ; audit des notices du paquet avant distribution |
-| 1 — Prototype PDF | À faire | — | Jalon bloquant avant interface complète |
+| 0 — Préparation | Terminée | Installation neuve reproduite ; 2 tests réussis dans chaque environnement ; `pip check` réussi ; PyInstaller 6.22.3 démarre | Girard Florian confirmé ; Python 3.12.0 autorisé sur synthétique seulement ; audit des notices du paquet avant distribution |
+| 1 — Prototype PDF | En cours | Étape 1 : corpus de base et ouverture bornée ; 11 tests réussis dans `.venv` et `.venv-check` | Définir les plafonds de pixels puis poursuivre les expériences de suppression ; jalon moteur non validé |
 | 2 — Moteur et session | À faire | — | — |
 | 3 — Lecteur et zones | À faire | — | — |
 | 4 — Aperçu et validation | À faire | — | — |
@@ -247,4 +248,6 @@ Installation reproductible dans un environnement neuf ; imports des composants r
 
 ### Instruction de lancement pour la prochaine session
 
-> Lis `spec.md` et `plan.md`, examine le dépôt, puis commence par la phase 0 et le prototype de la phase 1. Implémente et teste progressivement. Ne développe pas l'interface complète avant validation du moteur. Refuse explicitement les traitements non sûrs et signale tout blocage nécessitant une décision. Mets à jour le suivi de reprise sans inclure de données confidentielles. Ne commit et ne pousse que sur demande.
+**Reprise après l'étape 1 du prototype :** `tests/fixtures.py` génère en mémoire les quatre contenus de base, des multipages et des pages tournées/recadrées. Les tests prouvent la présence des marqueurs, l'identité du rendu scan/scan+OCR, le caractère invisible de l'OCR et les dimensions tournées/recadrées ; ils ne prouvent pas encore une suppression. `open_pdf` refuse les tailles hors limites avant parsing, borne aussi la lecture en cas de croissance du fichier, contrôle 1 à 49 pages, refuse les PDF chiffrés (même sans mot de passe d'ouverture), les fichiers d'un autre format et les PDF réparés par le moteur. Le source est lu en mémoire et reste inchangé. Les diagnostics natifs ne sont pas affichés pour éviter des fragments documentaires dans les journaux. Les cas d'images partagées, objets auxiliaires, coordonnées de sélection et suppression restent à développer. Python 3.12.0 est autorisé pour ce corpus synthétique seulement. Aucun export utilisateur ni contrôle de sûreté général n'existe à ce stade.
+
+> Lis `spec.md` et `plan.md`, examine le dépôt, puis reprends à la première tâche non terminée en tenant compte des notes de reprise. Implémente et teste progressivement. Ne développe pas l'interface complète avant validation du moteur. Refuse explicitement les traitements non sûrs et demande un arbitrage plutôt que deviner. Mets à jour le suivi de reprise sans inclure de données confidentielles. L'utilisateur autorise un commit Conventional Commit par étape vérifiée et sans défaut connu ; ne pousse que sur demande explicite.

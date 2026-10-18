@@ -23,6 +23,12 @@ documents non fiables ; le poste de préparation dispose actuellement de 3.12.0.
 Les tests utilisent uniquement des données synthétiques générées en mémoire.
 Ne pas déposer de documents clients dans le dépôt, même à titre d'exemple.
 
+Le prototype sait ouvrir en mémoire les PDF respectant les limites ci-dessous,
+avec refus des fichiers chiffrés, invalides ou réparés par le moteur. Le corpus
+couvre les contenus natifs, scans, scans avec OCR invisible et pages mixtes,
+ainsi que les rotations et le recadrage. L'ouverture ne signifie pas que le
+contenu est pris en charge pour une suppression : cette validation reste à faire.
+
 ## Limites décidées
 
 - Fichier non vide et strictement inférieur à 10 000 000 octets.
