@@ -9,6 +9,8 @@ Ce document sert de base à la planification du développement. Il décrit le be
 **Plateforme initiale :** poste Windows, utilisation locale.  
 **Langue initiale :** français.
 
+**Licence du projet :** GNU Affero General Public License version 3 (AGPLv3), identifiant SPDX `AGPL-3.0-only`. SubstiDude sera distribué en open source sous cette licence.
+
 ## 2. Problème à résoudre
 
 L'utilisateur développe et débogue des applications d'OCR et des traitements utilisant des LLM. Il travaille sur des documents clients : PDF natifs, tickets de caisse, factures et contrats scannés, avec ou sans couche OCR.
@@ -188,12 +190,40 @@ Ces fonctions ne seront ajoutées que si l'usage réel les justifie. Pour un tes
 
 - Privilégier une application mono-utilisateur et un moteur PDF existant plutôt qu'un traitement maison du format.
 - **Candidat : Python et PyMuPDF** pour le rendu, les coordonnées et la caviardisation, sous réserve d'un prototype validant la suppression réelle sur les différents contenus.
-- Examiner la licence AGPL/commerciale de PyMuPDF avant de fixer le mode de distribution.
+- Utiliser PyMuPDF sous son option AGPL, compatible avec le choix open source du projet, sous réserve de vérifier les licences des versions et composants effectivement distribués ; aucune licence commerciale n'est prévue.
 - Choisir pendant la planification entre interface de bureau et interface web strictement locale ; aucune infrastructure Laragon, base de données ou dépendance cloud n'est requise par le besoin.
 - Utiliser le même moteur de transformation pour l'aperçu final et l'export afin d'éviter deux comportements divergents.
 - Valider tôt la correspondance entre coordonnées écran et coordonnées PDF : zoom, rotation, recadrage, origine et dimensions de page.
 - Ne promettre ni PDF/A, ni maintien de signature, ni reproduction exacte des polices d'origine.
 - Maintenir les dépendances manipulant des PDF à jour : les fichiers ouverts sont des entrées non fiables.
+
+### 10.1. Licence et mentions à fournir
+
+Le choix AGPLv3 est confirmé. Avant toute distribution de code ou d'exécutables :
+
+- Ajouter à la racine un fichier `LICENSE` contenant le texte officiel intégral de l'AGPLv3 : https://www.gnu.org/licenses/agpl-3.0.txt. La présente spécification ne remplace pas ce fichier.
+- Indiquer dans le README la licence `AGPL-3.0-only`, l'emplacement du texte de licence et le dépôt source : https://github.com/Fl0-dev/SubstiDude.
+- Ajouter dans les fichiers source propres au projet une mention `SPDX-License-Identifier: AGPL-3.0-only` et une attribution de copyright avec l'année et le titulaire réel, à confirmer avant publication. Conserver les mentions des contributeurs et des composants tiers.
+- Fournir avec chaque version distribuée les mentions et textes de licence applicables, ainsi qu'un accès au code source correspondant exactement à cette version, y compris les modifications et les scripts nécessaires à sa construction et à son installation. Un lien vers la seule branche courante ne suffit pas à identifier le code d'un exécutable publié.
+- Prévoir une rubrique « À propos / Licences » accessible hors ligne : nom et version de SubstiDude, copyright, licence, absence de garantie selon les termes de l'AGPLv3, référence au code source et mentions des composants embarqués. Ne pas ouvrir de lien réseau automatiquement.
+- Si une version modifiée permet une interaction utilisateur à distance par réseau, respecter également l'obligation AGPL de proposer à ces utilisateurs l'accès à son code source correspondant. Cela n'introduit aucune fonction réseau dans la version locale prévue.
+
+Créer un fichier `THIRD_PARTY_NOTICES.md` pour inventorier les composants réellement livrés, leurs versions, leurs licences, leurs attributions et les textes à joindre. Les composants tiers conservent leurs propres licences ; la licence de SubstiDude ne les remplace pas.
+
+Points à vérifier selon la stack finalement retenue :
+
+| Composant envisagé | Licence / vérification à effectuer |
+| --- | --- |
+| Python | Conserver les mentions et licences applicables à l'interpréteur s'il est embarqué. |
+| PyMuPDF / MuPDF | Respecter les obligations AGPL et conserver les notices des composants effectivement livrés. |
+| PySide6 / Qt | Utiliser les composants disponibles sous licence libre compatible ; vérifier les conditions de chaque module Qt. Avec la LGPLv3, respecter notamment les droits de remplacement ou de reliaison des bibliothèques, les mentions et l'accès aux sources concernés. |
+| Pillow | Conserver sa licence et celles des bibliothèques d'images embarquées. |
+| PyInstaller | Vérifier la licence et l'exception applicables à la version utilisée ; elles ne dispensent pas du respect des licences des composants empaquetés. |
+| Polices, icônes et autres ressources | Choisir des licences autorisant leur redistribution et, pour les polices, leur intégration dans les PDF ; joindre les mentions requises. |
+
+La distribution devra être vérifiée sur son contenu réel, y compris les dépendances transitives. Le choix open source permet d'éviter l'achat d'une licence commerciale pour les composants proposés lorsque leurs conditions de licence libre sont respectées ; il ne supprime pas ces obligations.
+
+Les documents importés et les PDF exportés ne deviennent pas AGPL du seul fait de leur traitement par SubstiDude. Aucun document client ni aucune table de correspondance d'identités ne doit être publié avec les sources.
 
 ## 11. Critères d'acceptation
 
@@ -234,7 +264,7 @@ Compléter ce contrôle par une inspection avec un outil indépendant du moteur 
 
 ## 12. Décisions à prendre pendant la planification
 
-1. Mode de distribution : usage interne uniquement ou diffusion à d'autres utilisateurs ; conséquences sur les licences.
+1. Modalités de publication open source sous AGPLv3 : attribution du copyright, conditionnement des versions, accès aux sources correspondantes et notices de dépendances.
 2. Interface de bureau ou navigateur local ; procédure d'installation et de lancement sous Windows.
 3. Validation du moteur sur textes, images, vecteurs, couches et structures auxiliaires avant construction de l'interface complète.
 4. Liste exacte des contenus supportés et des refus de sécurité de la première version.
@@ -248,3 +278,4 @@ Compléter ce contrôle par une inspection avec un outil indépendant du moteur 
 - L'installation et le lancement local sous Windows sont documentés.
 - Les limites de confidentialité, les effets sur la structure PDF et le contrôle humain avant partage sont clairement indiqués.
 - Aucun service externe, compte ou stockage persistant de documents n'est nécessaire au fonctionnement.
+- Le dépôt et les versions distribuées contiennent la licence AGPLv3, les mentions des composants tiers et l'accès aux sources correspondantes décrits en section 10.1.
