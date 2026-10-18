@@ -56,6 +56,7 @@ L'outil doit supprimer réellement les informations ciblées, et non simplement 
 - Permettre plusieurs substitutions par page et dans plusieurs pages du document.
 - Réutiliser facilement le dernier texte saisi pendant la session.
 - Utiliser un fond opaque et une police locale intégrée ou embarquée à l'export, avec prise en charge des accents français.
+- Adapter le mode d'insertion au contenu remplacé : texte PDF pour le texte natif, pixels pour les scans. Une substitution sur un scan ne doit pas ajouter de texte natif qui permettrait de contourner l'OCR lors des tests.
 - Permettre un réglage simple de la taille du texte et de la couleur du fond pour les scans non blancs.
 - Ne jamais tronquer silencieusement un remplacement : signaler qu'il ne tient pas et demander une correction avant l'export.
 - Ne pas reformater les paragraphes ou déplacer le reste de la page.
@@ -67,9 +68,13 @@ La sélection doit englober toute l'information à retirer. Si un caractère ou 
 
 - Distinguer clairement les zones d'édition du résultat final.
 - Fournir un aperçu issu du PDF réellement transformé, et pas uniquement de rectangles superposés sur l'original.
+- Permettre un basculement original / résultat sur la même page, au même zoom et à la même position.
+- Toute modification d'une substitution invalide l'aperçu précédent et la confirmation de contrôle ; régénérer le résultat avant de permettre sa validation.
 - Présenter une liste des substitutions avec leur page et leur texte fictif.
 - Permettre de revenir directement à une zone depuis cette liste.
 - Avant l'enregistrement final, inviter l'utilisateur à contrôler toutes les pages et les identifiants indirects : signatures, photos, QR codes, codes-barres, coordonnées, références et numéros uniques.
+- Demander une confirmation explicite « J'ai vérifié le document » avant l'export. Cette confirmation porte sur la version exacte du résultat prévisualisé.
+- Afficher des états simples : « À vérifier », « Vérifié par l'utilisateur » et « Exporté ». Ne jamais afficher « Anonymisation garantie ».
 - Ne pas présenter cette confirmation comme une preuve d'anonymisation exhaustive.
 
 ### 4.4. Export
@@ -82,6 +87,7 @@ La sélection doit englober toute l'information à retirer. Si un caractère ou 
 - Éliminer les objets devenus inutilisés et les contenus auxiliaires décrits en section 6.
 - Préserver autant que possible le nombre, l'ordre, les dimensions et la rotation des pages.
 - Ne pas rasteriser systématiquement le document entier.
+- Hors des zones modifiées, conserver autant que possible la résolution des scans, la géométrie des pages et le texte natif existant ; ne pas appliquer de recompression avec perte supplémentaire aux images. Les effets du nettoyage des contenus auxiliaires restent ceux décrits en section 6.
 - Vérifier que le résultat se rouvre correctement avant de confirmer la réussite.
 - Utiliser une écriture temporaire puis une finalisation sûre pour ne pas laisser un fichier final partiel en cas d'erreur. Préserver une destination existante si l'export échoue.
 
@@ -91,17 +97,27 @@ La sélection doit englober toute l'information à retirer. Si un caractère ou 
 
 Supprimer les objets textuels concernés avant d'ajouter le remplacement. Un fond opaque ou une annotation visuelle ne constitue pas une suppression.
 
+Le remplacement du texte natif reste du texte PDF, sans rasteriser la page entière.
+
 ### Page scannée
 
 Supprimer ou remplacer réellement les pixels sensibles dans les images exportées. Il ne doit pas rester une image d'origine récupérable contenant les pixels effacés, même si une autre image ou un rectangle la recouvre.
+
+Intégrer le texte fictif aux pixels du scan, à sa résolution effective, sans ajouter de texte PDF sélectionnable pour ce remplacement. L'objectif est que l'application testée doive reconnaître le remplacement par OCR, comme le contenu scanné d'origine.
 
 ### PDF avec couche OCR ou contenu mixte
 
 Traiter ensemble les pixels visibles, le texte invisible et les autres objets concernés. Une même zone peut contenir du texte natif, des images et des éléments vectoriels.
 
+Pour une substitution dans un scan avec couche OCR, supprimer le texte OCR ciblé et intégrer le remplacement aux pixels. En première version, ne pas ajouter de texte OCR de remplacement ; conserver autant que possible le texte OCR hors de la zone. Le remplacement devra donc être reconnu par un nouvel OCR. Ce choix doit être indiqué à l'utilisateur.
+
+Sur une page mixte, choisir le mode selon le contenu de la zone, et non selon la page entière. Si la nature du contenu ou une superposition ambiguë empêche de déterminer un traitement sûr et fidèle, refuser cette substitution avec un motif explicite.
+
 ### Exigences communes
 
 - Gérer les images réutilisées entre plusieurs pages sans laisser leur version sensible récupérable dans le fichier final.
+- Détecter les images réutilisées avant export. Nettoyer une occurrence ne doit ni altérer silencieusement les autres ni laisser une copie récupérable contenant les pixels ciblés. Si une occurrence conservée empêche cette garantie, bloquer l'export et demander de traiter les occurrences concernées ; ne pas propager automatiquement la modification à d'autres pages.
+- Une substitution est locale à la zone choisie : elle ne garantit pas la suppression du même nom ou de la même information ailleurs dans le document. Le contrôle des autres occurrences reste à la charge de l'utilisateur.
 - Prendre en compte les masques, transparences, objets vectoriels et contenus masqués associés aux zones ciblées.
 - Ne pas se limiter à rechercher une chaîne dans les octets du fichier : compression, encodage et images rendent cette vérification insuffisante.
 - Si le moteur ne sait pas traiter sûrement un contenu, bloquer l'export avec une explication ; ne pas remplacer silencieusement la suppression par un masque visuel.
@@ -189,18 +205,30 @@ Les essais utilisent exclusivement des documents synthétiques ou autorisés, av
 | A2 | Remplacer un nom natif par « John Doe » | Le remplacement est visible ; l'ancien nom ciblé n'est plus extractible. |
 | A3 | Remplacer une donnée dans un scan | Les pixels sensibles ont disparu des images récupérables du PDF exporté. |
 | A4 | Remplacer une donnée sur un scan avec couche OCR | Ni les pixels ni le texte OCR ciblés ne subsistent. |
+| A4b | Comparer les modes de remplacement | Sur un PDF natif, le remplacement est extractible comme texte ; sur un scan, il est intégré aux pixels et absent du texte extractible. Sur un scan avec couche OCR, le texte OCR ciblé est retiré sans ajout de texte OCR de remplacement. |
 | A5 | Tester rotation, recadrage et plusieurs niveaux de zoom | La suppression correspond à la zone sélectionnée. |
-| A6 | Traiter plusieurs pages et une image réutilisée | Aucun objet sensible résiduel provenant des zones traitées n'est récupérable. |
+| A6 | Traiter plusieurs pages et une image réutilisée | Aucun objet sensible résiduel provenant des zones traitées n'est récupérable ; aucune autre occurrence n'est altérée silencieusement. Si ces conditions ne peuvent pas être réunies, l'export est bloqué avec une explication. |
 | A7 | Exporter un PDF contenant métadonnées et contenus auxiliaires | Les informations auxiliaires sont supprimées selon la section 6, ou l'export est explicitement refusé. |
-| A8 | Contrôler une zone non modifiée | Pas de changement visuel inattendu ; toute différence structurelle reste compatible avec les limites annoncées. |
+| A8 | Contrôler une zone non modifiée | Sur le corpus pris en charge, comparer les rendus à résolution identique, vérifier dimensions et rotation des pages, résolution des scans et présence du texte natif attendu. Pas de recompression avec perte supplémentaire. Documenter les écarts liés au nettoyage ou au moteur ; refuser les cas qui ne respectent pas ces contraintes. |
 | A9 | Simuler une erreur d'export | Original intact ; pas de destination finale partielle ; erreur compréhensible. |
 | A10 | Utiliser l'outil sans réseau | Ouverture, édition, aperçu et export fonctionnent sans appel externe. |
 | A11 | Saisir un texte trop long ou des zones chevauchantes | Aucun export trompeur : correction demandée. |
 | A12 | Ouvrir un format ou un contenu non supporté | Refus clair, sans affirmation de suppression sûre. |
+| A13 | Modifier une substitution après contrôle de l'aperçu | Le résultat passe à « À vérifier » ; l'aperçu doit être régénéré et la confirmation renouvelée avant export. |
+| A14 | Comparer original et résultat | Le basculement conserve page, zoom et position ; le résultat affiché correspond à la version exportée. |
 
 ### Validation minimale à automatiser
 
-Conserver un petit contrôle de non-régression exécutable couvrant au moins un PDF natif et un scan avec couche OCR. Il doit exporter, rouvrir le résultat et vérifier la disparition des marqueurs ciblés dans le texte et les images ainsi que la présence du remplacement.
+Conserver un petit contrôle de non-régression exécutable s'appuyant sur un corpus synthétique couvrant :
+
+- PDF natif, scan sans couche OCR et scan avec couche OCR ;
+- image réutilisée sur plusieurs pages ;
+- texte invisible et texte alternatif `ActualText` ;
+- annotations et champs de formulaire ;
+- document contenant des révisions incrémentales ;
+- page tournée et recadrée.
+
+Pour chaque cas pris en charge, exporter puis rouvrir le résultat et vérifier la disparition des marqueurs ciblés dans le texte, les images et les contenus auxiliaires concernés. Vérifier aussi la présence du remplacement sous la forme attendue : texte extractible pour le natif, pixels sans texte extractible ajouté pour le scan. Un cas volontairement non pris en charge doit vérifier le refus explicite et l'absence d'export final.
 
 Compléter ce contrôle par une inspection avec un outil indépendant du moteur de génération, incluant les objets inutilisés, contenus masqués et révisions antérieures. Une simple vérification visuelle, une recherche textuelle brute ou l'absence du nom dans un seul extracteur ne suffit pas à prouver la suppression.
 
