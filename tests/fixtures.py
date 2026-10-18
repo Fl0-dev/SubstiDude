@@ -11,7 +11,7 @@ import tempfile
 
 import pymupdf
 import pikepdf
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageCms, ImageDraw, ImageFont
 
 
 FONT = Path(__file__).resolve().parents[1] / "substidude/resources/NotoSans-Regular.ttf"
@@ -66,6 +66,167 @@ def make_pdf(kind="native", *, pages=1, rotation=0, cropped=False,
             options = dict(encryption=pymupdf.PDF_ENCRYPT_AES_256,
                            owner_pw="synthetic-owner", user_pw=user_password)
         return document.tobytes(garbage=4, deflate=True, **options)
+
+
+def image_variant_pdf(variant, *, pair=False):
+    """Copies dérivées et couleurs synthétiques ; aucune reconnaissance visuelle implicite."""
+    with Image.open(BytesIO(scan_image())) as opened:
+        original = opened.convert("RGB")
+    patch = bytes(value for y in range(128) for x in range(128)
+                  for value in (x * 2, y * 2, (x * 17 + y * 13) % 256))
+    original.paste(Image.frombytes("RGB", (128, 128), patch), (70, 430))
+    image = original.copy()
+    if variant == "pixel":
+        image.putpixel((599, 799), (254, 255, 255))
+    elif variant == "crop":
+        image = image.crop((20, 0, 600, 800))
+    elif variant == "resize":
+        image = image.resize((1200, 1600), Image.Resampling.NEAREST)
+    elif variant == "gray":
+        image = image.convert("L")
+    elif variant not in {"rgb", "icc", "jpeg", "profile"}:
+        raise ValueError("Variante synthétique inconnue")
+    with pymupdf.open() as document:
+        for current, encoding in ([(original, "PNG")] if pair else []) + [
+            (image, "JPEG" if variant == "jpeg" else "PNG")
+        ]:
+            encoded = BytesIO()
+            current.save(encoded, format=encoding, quality=80)
+            page = document.new_page(width=current.width / 2, height=current.height / 2)
+            page.insert_image(page.rect, stream=encoded.getvalue())
+        source = document.tobytes()
+    with pikepdf.Pdf.open(BytesIO(source)) as document:
+        # Comparer dans un même espace couleur, sans masquer les limites du hash
+        # par un refus précoce dû aux profils par défaut différents de PNG et JPEG.
+        for page in document.pages:
+            obj, = page.get_images().values()
+            if variant != "icc":
+                obj.ColorSpace = pikepdf.Name.DeviceGray if variant == "gray" and not pair else pikepdf.Name.DeviceRGB
+        if variant == "profile":
+            obj, = document.pages[-1].get_images().values()
+            profile = document.make_stream(ImageCms.ImageCmsProfile(ImageCms.createProfile("LAB")).tobytes())
+            profile.N, profile.Alternate = 3, pikepdf.Name.DeviceRGB
+            obj.ColorSpace = pikepdf.Array([pikepdf.Name.ICCBased, profile])
+        output = BytesIO()
+        document.save(output)
+        return output.getvalue()
+
+
+def shared_text_pdf():
+    """Deux cibles et un témoin dans un unique opérateur TJ / span texte."""
+    with pymupdf.open() as document:
+        page = document.new_page(width=600, height=400)
+        page.insert_font(fontname="noto", fontfile=str(FONT))
+        page.insert_text((30, 95), TARGET + "    " + KEPT + "    AUTRE-CIBLE-789",
+                         fontname="noto", fontsize=10)
+        rectangles = [(box.x0, 70, box.x1, 110)
+                      for marker in (TARGET, "AUTRE-CIBLE-789") for box in page.search_for(marker)]
+        return document.tobytes(), rectangles
+
+
+def hidden_reference_pdf(feature):
+    """Références auxiliaires synthétiques ; une seule image, jamais de gros décodage."""
+    with pikepdf.Pdf.open(BytesIO(make_pdf("ocr"))) as document:
+        page = document.pages[0]
+        font = page.obj.Resources.Font.noto
+        image, = page.get_images().values()
+        if feature == "icc":
+            container = image.ColorSpace[1]
+        elif feature == "font":
+            container = font
+        elif feature == "descriptor":
+            container = font.DescendantFonts[0].FontDescriptor
+        elif feature == "font-program":
+            container = font.DescendantFonts[0].FontDescriptor.FontFile2
+        elif feature == "cmap":
+            container = font.ToUnicode
+        elif feature == "content":
+            container = page.obj.Contents[0]
+        elif feature == "cid-info":
+            container = font.DescendantFonts[0].CIDSystemInfo
+        elif feature == "font-name":
+            font.BaseFont = pikepdf.Dictionary(Private=document.make_stream(AUXILIARY_MARKER.encode()))
+            container = None
+        elif feature == "font-widths":
+            font.DescendantFonts[0].W = pikepdf.Array([0, [document.make_stream(AUXILIARY_MARKER.encode())]])
+            container = None
+        elif feature == "icc-alternate":
+            image.ColorSpace[1].Alternate = pikepdf.Dictionary(
+                Private=document.make_stream(AUXILIARY_MARKER.encode()))
+            container = None
+        elif feature == "unused-font":
+            page.obj.Resources.Font.Hidden = pikepdf.Dictionary(
+                Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1,
+                BaseFont=pikepdf.Name.Helvetica,
+                Private=document.make_stream(AUXILIARY_MARKER.encode()),
+            )
+            container = None
+        else:
+            raise ValueError("Référence synthétique inconnue")
+        if container is not None:
+            container.Private = document.make_stream(AUXILIARY_MARKER.encode())
+        output = BytesIO()
+        document.save(output)
+        return output.getvalue()
+
+
+def zone_case_pdf(feature):
+    """Voisins volontairement hors du périmètre de classification initial."""
+    kind = "scan" if feature in {
+        "visible-overlay", "mask", "clip", "shear", "image-rotation", "mirror",
+        "image-scale", "two-images",
+    } else "native"
+    with pymupdf.open(stream=make_pdf(kind)) as document:
+        page = document[0]
+        if feature in {"visible-overlay", "text-overlap", "transparent-text", "hidden-text"}:
+            opacity = {"transparent-text": 0.5, "hidden-text": 0}.get(feature, 1)
+            page.insert_text((42, 95), "AUTRE-TEXTE", fontsize=16, fill_opacity=opacity)
+        elif feature == "vector":
+            page.draw_line((0, 80), (300, 80))
+        elif feature == "mask":
+            image = Image.new("RGBA", (600, 800), (255, 255, 255, 128))
+            encoded = BytesIO()
+            image.save(encoded, format="PNG")
+            page.replace_image(page.get_images()[0][0], stream=encoded.getvalue())
+        elif feature == "two-images":
+            encoded = BytesIO()
+            Image.new("RGB", (10, 10), "white").save(encoded, format="PNG")
+            page.insert_image(TARGET_RECT, stream=encoded.getvalue())
+        elif feature == "nested":
+            with pymupdf.open() as wrapper:
+                outer = wrapper.new_page(width=300, height=400)
+                outer.show_pdf_page(outer.rect, document, 0)
+                return wrapper.tobytes()
+        source = document.tobytes()
+    with pikepdf.Pdf.open(BytesIO(source)) as document:
+        page = document.pages[0]
+        instructions = list(pikepdf.parse_content_stream(page))
+        transforms = {
+            "shear": [300, 0, 20, 400, 0, 0],
+            "image-rotation": [0, 400, -300, 0, 300, 0],
+            "mirror": [-300, 0, 0, 400, 300, 0],
+            "image-scale": [600, 0, 0, 800, 0, -400],
+        }
+        if feature in transforms:
+            instructions = [pikepdf.ContentStreamInstruction(transforms[feature], item.operator)
+                            if str(item.operator) == "cm" else item for item in instructions]
+        content = pikepdf.unparse_content_stream(instructions)
+        if feature == "clip":
+            content = b"q 0 300 300 100 re W n\n" + content + b"\nQ"
+        elif feature == "invisible-native":
+            content = b"3 Tr\n" + content
+        elif feature == "text-clip":
+            content = b"7 Tr\n" + content
+        elif feature == "unknown-operator":
+            content += b"\nBX Unqualified EX"
+        elif feature == "missing-resources":
+            del page.obj["/Resources"]
+        elif feature == "invalid-xobject":
+            page.obj.Resources.XObject = pikepdf.Array([1])
+        page.obj.Contents = document.make_stream(content)
+        output = BytesIO()
+        document.save(output)
+        return output.getvalue()
 
 
 def zero_page_pdf():

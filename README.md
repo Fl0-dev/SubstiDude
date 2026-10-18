@@ -57,11 +57,45 @@ maîtrisées. Ces refus ont lieu avant transformation, y compris dans les objets
 Une référence XMP ambiguë ou un avertissement de parsing interdit le résultat.
 Le pipeline complet et son état de validation restent à construire.
 
-Le contrôle préalable des images réutilisées repère les occurrences visibles
-identiques, même avec des objets distincts, un encodage PDF différent ou des
-objets imbriqués. Il refuse leur modification locale sans modifier le document.
-À ce stade, masques et mélanges d'espaces couleur sont refusés par ce contrôle ;
-les copies dont les pixels ont changé et les couches cachées restent à qualifier.
+`classify_zone` reconnaît expérimentalement les zones natives, scannées et avec
+OCR invisible, y compris les zones distinctes d'une page mixte. La liste positive
+reste limitée aux pages simples du corpus : scans gris/RGB 8 bits sans masque,
+axes positifs à 2 pixels par point PDF ; textes horizontaux opaques sans
+superposition ambiguë. Form, vecteurs, découpes et ressources graphiques complexes
+font refuser la page entière à ce stade. Cette reconnaissance ne transforme pas
+le document et n'autorise aucun export ; elle ne prouve pas la suppression.
+
+Le parcours multi-zones de `tests/test_pipeline.py` assemble ces expériences en
+mémoire, avec contrôles des octets nettoyés et comparaison indépendante PDFium/qpdf.
+Il couvre plusieurs zones sur une image, pages mixtes et multipages ; il refuse
+notamment les groupes texte partagés par plusieurs zones et les images non affichées.
+Ce code reste réservé au corpus synthétique, avec fond blanc, texte monoligne et
+police 14 pt fixes ; ce n'est pas un export utilisateur ni un moteur validé.
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p test_pipeline.py -v
+```
+
+L'expérience de regroupement des images repère les occurrences visibles identiques,
+même avec des objets distincts, un encodage PDF différent ou des objets imbriqués.
+Elle ne reconnaît pas toutes les copies recadrées, rééchantillonnées ou modifiées :
+un seul pixel changé ailleurs suffit à laisser la zone sensible hors détection.
+**Périmètre V1 confirmé : toute substitution raster dans un document contenant plusieurs
+images ou plusieurs occurrences est refusée**, sans propagation automatique. Plusieurs
+zones sur une seule image et les pages natives restent possibles. Les scans multipages
+sont hors périmètre raster V1 ; le moteur reste à qualifier avant toute utilisation client.
+
+Sur le corpus à image unique, le parcours conserve les canaux et l'espace couleur
+PDF avant/après remplacement, sans recompression JPEG supplémentaire. DeviceGray,
+DeviceRGB et le profil sRGB MuPDF connu sont qualifiés ; profils inconnus et
+paramètres complexes restent refusés. Des pixels identiques ne suffisent pas à
+prouver la conservation du rendu si le profil couleur change.
+
+L'inspection commune refuse aussi les références inconnues dans les dictionnaires
+de polices, leurs descripteurs/flux, les profils ICC et les flux de page. Le corpus
+reproduit des résidus référencés malgré une réécriture complète, puis vérifie leur
+refus avant transformation et sur le résultat. Cela ne qualifie pas encore les
+contenus internes des programmes de police/CMap ni toutes les représentations cachées.
 
 ## Limites décidées
 

@@ -17,9 +17,9 @@ import test_engine
 import test_raster
 
 
-def render_and_extract(data):
+def render_and_extract(data, page_number=0):
     with closing(pdfium.PdfDocument(data)) as document:
-        with closing(document[0]) as page:
+        with closing(document[page_number]) as page:
             with closing(page.get_textpage()) as text_page:
                 text = text_page.get_text_bounded()
             # Comparer avant/après dans PDFium, pas les pixels de deux moteurs différents.

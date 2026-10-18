@@ -117,6 +117,8 @@ Sur une page mixte, choisir le mode selon le contenu de la zone, et non selon la
 
 ### Exigences communes
 
+**Périmètre prudent V1 confirmé par l'utilisateur :** une substitution raster est autorisée uniquement si le PDF entier contient un seul objet image et une seule occurrence visible de cette image. Plusieurs zones sur cette image, ainsi que des pages natives dans le même document, restent possibles sous réserve des autres contrôles. Refuser les substitutions raster dans les PDF multi-images, notamment les scans multipages et les pages constituées de plusieurs images ; ne pas propager automatiquement les modifications. Cette restriction évite de promettre une détection générale des copies recadrées, rééchantillonnées ou dont les pixels diffèrent. Une extension exigera une nouvelle qualification du moteur. La présence d'une seule image ne dispense d'aucun autre contrôle de structure, de suppression ou de confidentialité.
+
 - Gérer les images réutilisées entre plusieurs pages sans laisser leur version sensible récupérable dans le fichier final.
 - Détecter les images réutilisées avant export. Nettoyer une occurrence ne doit ni altérer silencieusement les autres ni laisser une copie récupérable contenant les pixels ciblés. Si une occurrence conservée empêche cette garantie, bloquer l'export et demander de traiter les occurrences concernées ; ne pas propager automatiquement la modification à d'autres pages.
 - Une substitution est locale à la zone choisie : elle ne garantit pas la suppression du même nom ou de la même information ailleurs dans le document. Le contrôle des autres occurrences reste à la charge de l'utilisateur.

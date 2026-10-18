@@ -75,7 +75,8 @@ class RepeatedImageTests(unittest.TestCase):
         with pymupdf.open(stream=make_pdf("scan")) as document:
             for page, rect in ((-1, TARGET_RECT), (1, TARGET_RECT),
                                (0, (0, 0, 0, 0)), (0, (-1, 0, 10, 10)),
-                               (0, (0, 0, float("inf"), 10))):
+                               (0, (0, 0, float("inf"), 10)), (0, None),
+                               (0, (0, 0, 1)), (0.5, TARGET_RECT)):
                 with self.subTest(page=page, rectangle=rect), self.assertRaises(PDFError):
                     check_image_reuse(document, page, rect)
 
