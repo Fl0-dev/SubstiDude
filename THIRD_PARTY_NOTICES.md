@@ -50,3 +50,22 @@ La qualification du paquet devra identifier les hooks d'exécution, le bootloade
 l'interpréteur et les bibliothèques réellement embarqués, joindre leurs textes,
 et fournir les sources correspondantes exigées par leurs licences. Ne pas
 annoncer cet audit de distribution comme terminé avant le conditionnement.
+
+## Inspection indépendante — développement seulement
+
+Ajout autorisé par l'utilisateur. Ces composants ne figurent pas dans
+`requirements.txt` et ne doivent pas être embarqués dans l'application.
+
+| Composant | Version testée | Licence / notices de la roue installée |
+| --- | --- | --- |
+| pikepdf | 10.17.0 | MPL-2.0, `pikepdf-10.17.0.dist-info/licenses/LICENSE.txt` ; notices sous `third-party-licenses/`. |
+| qpdf, inclus dans pikepdf | 12.4.2 | Apache-2.0, `third-party-licenses/qpdf.txt` dans les notices de pikepdf. |
+| pypdfium2 | 5.14.0 | Apache-2.0 / BSD-3-Clause selon les fichiers, textes dans `pypdfium2-5.14.0.dist-info/licenses/LICENSES/`. |
+| PDFium, inclus dans pypdfium2 | 156.0.8076.0 | Licence BSD à 3 clauses des auteurs PDFium et notices des dépendances dans `licenses/data/windows_x64/BUILD_LICENSES/`. |
+| lxml, dépendance de pikepdf | 6.1.3 | BSD-3-Clause et exceptions ; conserver `lxml-6.1.3.dist-info/licenses/LICENSE.txt` et `LICENSES.txt`, notamment les notices libxml2, libxslt, iconv et zlib de la roue. |
+
+Sources amont : https://github.com/pikepdf/pikepdf,
+https://github.com/qpdf/qpdf, https://github.com/pypdfium2-team/pypdfium2,
+https://pdfium.googlesource.com/pdfium/ et https://github.com/lxml/lxml.
+Ces outils sont installés dans les environnements virtuels de développement,
+sans installation système ni téléchargement pendant les tests.

@@ -34,7 +34,17 @@ les rotations/recadrages et l'absence de différences de rendu hors zone. Si
 sinon ce test est signalé comme ignoré, pas comme une qualification réussie.
 Les expériences scan/OCR modifient les pixels sans perte supplémentaire et
 vérifient la disparition du texte OCR ciblé sans ajout de texte PDF fictif.
-Le contrôle indépendant des images et structures PDF reste à réaliser.
+Les tests indépendants utilisent **pikepdf/qpdf** pour la structure et la récupération
+des images, et **pypdfium2/PDFium** pour le rendu et le texte. Ils sont installés
+uniquement par `requirements-dev.txt`, pas avec les dépendances d'exécution.
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p test_independent.py -v
+```
+
+Ces contrôles couvrent les sorties simples du corpus et détectent une image
+originale résiduelle cachée ou inutilisée. Le nettoyage des contenus auxiliaires,
+des anciennes révisions et le traitement des images partagées restent à qualifier.
 
 ## Limites décidées
 
