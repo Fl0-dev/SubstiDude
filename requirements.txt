@@ -1,6 +1,8 @@
-# Moteur du prototype ; PySide6 sera ajouté au premier besoin d'interface.
+# Moteur et interface locale Qt Widgets ; aucun module Qt Addons nécessaire.
 PyMuPDF==1.28.2
 Pillow==13.0.0
 pikepdf==10.17.0
 lxml==6.1.3
 packaging==26.3
+PySide6-Essentials==6.12.0
+shiboken6==6.12.0

@@ -19,6 +19,10 @@ import substidude.pdf_engine as engine
 
 def stream_pdf(contents, encoding="flate", *, data=None):
     with pikepdf.Pdf.open(BytesIO(make_pdf() if data is None else data)) as document:
+        # Le nettoyage natif peut produire un /Contents unique plutôt qu'un
+        # tableau : référencer réellement le flux injecté dans les deux cas.
+        if isinstance(document.pages[0].obj.Contents, pikepdf.Stream):
+            document.pages[0].obj.Contents = pikepdf.Array([document.pages[0].obj.Contents])
         for payload in contents:
             stream = document.make_stream(b"")
             if encoding == "flate":
@@ -143,6 +147,6 @@ class ResourceLimitTests(unittest.TestCase):
             return stream_pdf([b"%" + b"X" * 600_000 + b"\n"], data=engine.sanitize_pdf(data))
 
         with patch.object(engine, "MAX_RESOURCE_STREAM_BYTES", 600_000), \
-                patch("test_pipeline.sanitize_pdf", contaminate):
+                patch("substidude.pipeline.sanitize_pdf", contaminate):
             with self.assertRaisesRegex(engine.PDFError, "flux décompressés"):
                 replace_zones(make_pdf(), [(0, TARGET_RECT, "Toto")])

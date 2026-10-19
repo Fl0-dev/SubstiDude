@@ -115,7 +115,7 @@ def check(openssl, directory):
         require(set(directory.iterdir()) == before, "Sortie inattendue.")
         checks.append(name + "-refused")
     # Le même garde doit aussi interdire une contamination des octets finaux.
-    with patch.object(test_pipeline, "sanitize_pdf", return_value=source):
+    with patch("substidude.pipeline.sanitize_pdf", return_value=source):
         try:
             test_pipeline.replace_zones(make_pdf(), [(0, TARGET_RECT, "Toto")])
         except PDFError as error:

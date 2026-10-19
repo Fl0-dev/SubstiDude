@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 Girard Florian
 
-"""Parcours expérimental sur corpus synthétique, pas une API d'export utilisateur."""
+"""Corpus historique du moteur applicatif, sans export utilisateur."""
 
-from collections import Counter
 from hashlib import sha256
 from io import BytesIO
 import unittest
@@ -18,227 +17,22 @@ from fixtures import (
     shared_text_pdf, zone_case_pdf,
 )
 from substidude.pdf_engine import (
-    PDFError, _check_simple_page, _open_mupdf, _open_supported_structure, _pdf_objects,
-    classify_zone, page_to_view_matrix, sanitize_pdf,
+    PDFError, page_to_view_matrix, sanitize_pdf,
 )
 from test_independent import render_and_extract, text_runs
 import test_independent
+from substidude import pipeline
+from substidude.model import Substitution
+from substidude.pipeline import image_key, outside_characters
 
 
-FONT_NAME = "substidudePrototype"
 REPLACEMENTS = ("Société Élodie", "Toto")
 SECOND_RECT = (35, 150, 260, 185)
 
 
-def image_key(image):
-    return image.size, sha256(image.convert("RGB").tobytes()).digest()
-
-
-def image_objects(document):
-    return [xref for xref in range(1, document.xref_length())
-            if document.xref_get_key(xref, "Subtype") == ("name", "/Image")]
-
-
-def outside_characters(page, rectangles):
-    # Les identités de glyphes dépendent des polices ; comparer Unicode, type et géométrie.
-    return Counter((span["type"], span["opacity"], span["font"], span["color"],
-                    char[0], tuple(round(v, 3) for v in char[3]))
-                   for span in page.get_texttrace() for char in span["chars"]
-                   if not any(pymupdf.Rect(char[3]).intersects(rect) for rect in rectangles))
-
-
-def image_colors(structure):
-    """Propriétés couleur indépendantes des numéros d'objets après réécriture."""
-    colors = Counter()
-    for obj in structure.objects:
-        if not isinstance(obj, pikepdf.Stream) or obj.get("/Subtype") != pikepdf.Name.Image:
-            continue
-        space = obj.get("/ColorSpace")
-        if isinstance(space, pikepdf.Array):
-            profile = space[1]
-            color = (str(space[0]), profile.get("/N"), str(profile.get("/Alternate")),
-                     tuple(profile.get("/Range", [])), sha256(profile.read_bytes()).digest())
-        else:
-            color = str(space)
-        colors[(obj.get("/Width"), obj.get("/Height"), obj.get("/BitsPerComponent"), color)] += 1
-    return colors
-
-
-def verify_result(result, geometry, outside_text, plan, expected_images, expected_colors):
-    """Contrôles par résultat de cette expérience ; pas une qualification PDF générale."""
-    with _open_supported_structure(result) as structure, _open_mupdf(result) as document:
-        if len(geometry) != document.page_count or structure.check_pdf_syntax():
-            raise PDFError("Le résultat n'a pas conservé la structure attendue.")
-        if ("/Prev" in structure.trailer or "/Info" in structure.trailer
-                or any(set(obj.keys()) & {"/Info", "/Metadata", "/Thumb"}
-                       for obj in _pdf_objects(structure.objects) if not isinstance(obj, pikepdf.Array))):
-            raise PDFError("Le nettoyage des contenus auxiliaires n'est pas vérifié.")
-        for number, page in enumerate(document):
-            if (tuple(page.mediabox), tuple(page.cropbox), page.rotation) != geometry[number]:
-                raise PDFError("La géométrie des pages a changé.")
-            rectangles = [rect for n, rect, _, _ in plan if n == number]
-            if outside_characters(page, rectangles) != outside_text[number]:
-                raise PDFError("Du texte hors zone a changé.")
-        for number, rect, text, mode in plan:
-            if document[number].get_textbox(rect) != (text if mode == "native" else ""):
-                raise PDFError("Le retrait du texte ou son remplacement n'est pas vérifié.")
-            if mode == "native" and any(
-                span["type"] != 0 or span["opacity"] != 1
-                for span in document[number].get_texttrace()
-                if any(pymupdf.Rect(char[3]).intersects(rect) for char in span["chars"])
-            ):
-                raise PDFError("Le remplacement natif n'est pas du texte visible opaque.")
-        recovered = Counter()
-        for xref in image_objects(document):
-            with Image.open(BytesIO(document.extract_image(xref)["image"])) as image:
-                recovered[image_key(image)] += 1
-        if recovered != Counter(expected_images.values()):
-            raise PDFError("Les images récupérables ne correspondent pas aux pixels attendus.")
-        if image_colors(structure) != expected_colors:
-            raise PDFError("Les espaces couleur des images n'ont pas été conservés.")
-
-
 def replace_zones(source, zones):
-    """Expérience : tuples (page, rectangle, texte), fond blanc et police 14 pt fixes.
-
-    Aucun fichier écrit. La phase 2 consolidera ce parcours après qualification du moteur.
-    """
-    try:
-        if type(source) is not bytes or not isinstance(zones, (list, tuple)) or not zones:
-            raise PDFError("Cette expérience demande un original en octets et des zones explicites.")
-        plan = []
-        font = pymupdf.Font(fontfile=str(FONT))
-        for number, rectangle, text in zones:
-            if (not isinstance(text, str) or text != text.strip()
-                    or any(not c.isprintable() or not font.has_glyph(ord(c), fallback=False) for c in text)):
-                raise PDFError("Le texte de remplacement contient des caractères non pris en charge.")
-            # ponytail: réinspection par zone ; réutiliser une inspection unique en phase 2 si coûteux.
-            mode = classify_zone(source, number, rectangle)
-            rect = pymupdf.Rect(rectangle)
-            if any(n == number and rect.intersects(other) for n, other, _, _ in plan):
-                raise PDFError("Les zones se chevauchent ; corriger les sélections.")
-            with pymupdf.open() as scratch:
-                page = scratch.new_page(width=rect.width, height=rect.height)
-                page.insert_font(fontname=FONT_NAME, fontfile=str(FONT))
-                if text and page.insert_textbox(page.rect + (1, 1, -1, -1), text,
-                                                fontname=FONT_NAME, fontsize=14) < 0:
-                    raise PDFError("Le remplacement ne tient pas dans la zone ; corriger le texte.")
-            plan.append((number, rect, text, mode))
-
-        with _open_supported_structure(source) as structure, _open_mupdf(source) as document:
-            for page in structure.pages:
-                _check_simple_page(page)
-            expected_colors = image_colors(structure)
-            geometry, outside_text = [], []
-            visible_images = set()
-            image_infos = {}
-            for number, page in enumerate(document):
-                rectangles = [rect for n, rect, _, _ in plan if n == number]
-                geometry.append((tuple(page.mediabox), tuple(page.cropbox), page.rotation))
-                outside_text.append(outside_characters(page, rectangles))
-                if any(entry[4] == FONT_NAME for entry in page.get_fonts()):
-                    raise PDFError("Le nom de police du prototype existe déjà dans le document.")
-                for info in page.get_image_info(xrefs=True):
-                    if not info["xref"]:
-                        raise PDFError("Une image ne peut pas être associée à son objet PDF.")
-                    visible_images.add(info["xref"])
-                    image_infos.setdefault(number, []).append(info)
-                for block in page.get_text(
-                    "rawdict", flags=pymupdf.TEXTFLAGS_RAWDICT & ~pymupdf.TEXT_PRESERVE_IMAGES
-                )["blocks"]:
-                    if block["type"] != 0:
-                        continue
-                    for line in block["lines"]:
-                        for span in line["spans"]:
-                            for char in span["chars"]:
-                                box = pymupdf.Rect(char["bbox"])
-                                touched = [rect for rect in rectangles if box.intersects(rect)]
-                                if len(touched) > 1:
-                                    raise PDFError("Deux zones disjointes touchent le même caractère.")
-                                if touched and not touched[0].contains(box):
-                                    raise PDFError("Un caractère traverse la limite de la sélection.")
-                for span in page.get_texttrace():
-                    if sum(any(pymupdf.Rect(char[3]).intersects(rect) for char in span["chars"])
-                           for rect in rectangles) > 1:
-                        raise PDFError("Deux zones touchent le même groupe de texte ; traitement refusé.")
-            if set(image_objects(document)) != visible_images:
-                raise PDFError("Une image non affichée ne peut pas être qualifiée dans cette expérience.")
-
-            expected_images, edited, raster_text, colorspaces = {}, {}, [], {}
-            for xref in visible_images:
-                with Image.open(BytesIO(document.extract_image(xref)["image"])) as image:
-                    expected_images[xref] = image_key(image)
-            raster_font = ImageFont.truetype(str(FONT), 28)
-            for number, rect, text, mode in plan:
-                if mode == "native":
-                    continue
-                info, = [info for info in image_infos[number]
-                         if pymupdf.Rect(info["bbox"]).intersects(rect)]
-                xref = info["xref"]
-                if xref not in edited:
-                    with Image.open(BytesIO(document.extract_image(xref)["image"])) as image:
-                        if image.mode not in ("RGB", "L"):
-                            raise PDFError("Le mode des pixels décodés n'est pas qualifié.")
-                        edited[xref] = (number, image.copy())
-                    colorspaces[xref] = document.xref_get_key(xref, "ColorSpace")[1]
-                image = edited[xref][1]
-                # Les axes positifs sans cisaillement sont déjà imposés par la classification.
-                # Calcul en double précision : les Matrix MuPDF arrondissent les bords entiers.
-                a, _, _, d, e, f = info["transform"]
-                pixels = ((rect.x0 - e) * image.width / a, (rect.y0 - f) * image.height / d,
-                          (rect.x1 - e) * image.width / a, (rect.y1 - f) * image.height / d)
-                if any(abs(v - round(v)) > 1e-5 for v in pixels):
-                    raise PDFError("La sélection doit suivre les pixels dans cette expérience.")
-                x0, y0, x1, y1 = (round(v) for v in pixels)
-                if not (0 <= x0 < x1 <= image.width and 0 <= y0 < y1 <= image.height):
-                    raise PDFError("La conversion de la zone en pixels est invalide.")
-                if text:
-                    left, top, right, bottom = ImageDraw.Draw(image).textbbox(
-                        (x0 + 2, y0 + 2), text, font=raster_font, anchor="lt")
-                    if left < x0 + 2 or top < y0 + 2 or right > x1 - 2 or bottom > y1 - 2:
-                        raise PDFError("Le remplacement raster ne tient pas dans la zone.")
-                ImageDraw.Draw(image).rectangle((x0, y0, x1 - 1, y1 - 1), fill="white")
-                raster_text.append((xref, (x0, y0, x1, y1), text))
-
-            # Retirer tous les textes natifs/OCR avant toute insertion fictive.
-            for number, page in enumerate(document):
-                targets = [(rect, mode) for n, rect, _, mode in plan if n == number and mode != "scan"]
-                for rect, mode in targets:
-                    page.add_redact_annot(rect, fill=(1, 1, 1) if mode == "native" else None)
-                if targets:
-                    page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE,
-                                          graphics=pymupdf.PDF_REDACT_LINE_ART_NONE,
-                                          text=pymupdf.PDF_REDACT_TEXT_REMOVE)
-            for xref, (x0, y0, x1, y1), text in raster_text:
-                draw = ImageDraw.Draw(edited[xref][1])
-                # Marge déjà qualifiée à 2 px/point ; aucune extension d'échelle implicite.
-                position = (x0 + 2, y0 + 2)
-                if text:
-                    draw.text(position, text, font=raster_font, fill="black", anchor="lt")
-            for xref, (number, image) in edited.items():
-                encoded = BytesIO()
-                image.save(encoded, format="PNG")
-                document[number].replace_image(xref, stream=encoded.getvalue())
-                # Le PNG inséré reprend sinon l'espace couleur par défaut de MuPDF.
-                # Garder les canaux d'origine et leur espace/profil PDF déjà qualifié.
-                document.xref_set_key(xref, "ColorSpace", colorspaces[xref])
-                # replace_image laisse une ressource d'insertion inutilisée ; ne pas
-                # conserver une seconde image au profil par défaut après restauration.
-                document[number].clean_contents()
-                expected_images[xref] = image_key(image)
-            for number, rect, text, mode in plan:
-                if mode == "native" and text:
-                    page = document[number]
-                    page.insert_font(fontname=FONT_NAME, fontfile=str(FONT))
-                    if page.insert_textbox(rect + (1, 1, -1, -1), text, fontname=FONT_NAME, fontsize=14) < 0:
-                        raise PDFError("Le remplacement natif ne tient pas dans la zone.")
-            result = sanitize_pdf(document.tobytes(garbage=4, deflate=True))
-        verify_result(result, geometry, outside_text, plan, expected_images, expected_colors)
-        return result
-    except PDFError:
-        raise
-    except (RuntimeError, ValueError, TypeError, KeyError, OSError, pikepdf.PdfError):
-        raise PDFError("Le parcours expérimental a échoué ; aucun résultat n'est validé.") from None
+    """Adaptateur du corpus historique ; tout le traitement est dans le moteur."""
+    return pipeline.transform(source, [Substitution(n, tuple(rect), text) for n, rect, text in zones])
 
 
 class PipelineTests(unittest.TestCase):
@@ -378,19 +172,19 @@ class PipelineTests(unittest.TestCase):
                 document.xref_copy(document[0].get_images()[0][0], xref)
                 return document.tobytes(garbage=0)
 
-        with patch(__name__ + ".sanitize_pdf", corrupt):
+        with patch("substidude.pipeline.sanitize_pdf", corrupt):
             with self.assertRaisesRegex(PDFError, "images récupérables"):
                 replace_zones(make_pdf("scan"), [(0, TARGET_RECT, "Toto")])
-        with patch(__name__ + ".sanitize_pdf", lambda data: data):
+        with patch("substidude.pipeline.sanitize_pdf", lambda data: data):
             with self.assertRaisesRegex(PDFError, "nettoyage"):
                 replace_zones(auxiliary_pdf("metadata"), [(0, TARGET_RECT, "Toto")])
 
     def test_refusals_before_mutation(self):
         cases = [
             (make_pdf(), [(0, TARGET_RECT, "Toto"), (0, TARGET_RECT, "Autre")], "chevauch"),
-            (make_pdf(), [(0, TARGET_RECT, "X" * 1000)], "tient"),
+            (make_pdf(), [(0, TARGET_RECT, "X\n" * 100)], "tient"),
             (make_pdf("scan"), [(0, TARGET_RECT, "X" * 1000)], "tient"),
-            (make_pdf(), [(0, TARGET_RECT, "ligne\nsuivante")], "caractères"),
+            (make_pdf(), [(0, TARGET_RECT, "ligne\tsuivante")], "caractères"),
             (make_pdf(), [(0, TARGET_RECT, "\U0010ffff")], "caractères"),
             (make_pdf("mixed"), [(0, TARGET_RECT, "Toto"), (0, (35, 70, 260, 305), "")], "refus|image|chevauch"),
             (repeated_images_pdf(), [(0, TARGET_RECT, ""), (1, TARGET_RECT, "")], "réutilisée"),
@@ -432,7 +226,7 @@ class PipelineTests(unittest.TestCase):
                 replace_zones(make_pdf("scan"), [(0, TARGET_RECT, "Toto")])
 
     def test_cleanup_failure_does_not_disclose_document_content(self):
-        with patch(__name__ + ".sanitize_pdf", side_effect=RuntimeError(TARGET)):
+        with patch("substidude.pipeline.sanitize_pdf", side_effect=RuntimeError(TARGET)):
             with self.assertRaises(PDFError) as caught:
                 replace_zones(make_pdf(), [(0, TARGET_RECT, "Toto")])
         self.assertNotIn(TARGET, str(caught.exception))

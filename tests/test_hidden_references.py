@@ -70,7 +70,7 @@ class HiddenReferenceTests(unittest.TestCase):
                 document.save(output)
                 return output.getvalue()
 
-        with patch.object(test_pipeline, "sanitize_pdf", contaminate):
+        with patch("substidude.pipeline.sanitize_pdf", contaminate):
             with self.assertRaises(PDFError) as caught:
                 replace_zones(make_pdf("ocr"), [(0, TARGET_RECT, "Toto")])
         self.assertNotIn(AUXILIARY_MARKER, str(caught.exception))

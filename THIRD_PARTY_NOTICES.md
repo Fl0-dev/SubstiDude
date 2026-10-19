@@ -17,7 +17,8 @@ distribué à cette étape. Les mentions des auteurs et textes de licence doiven
 | lxml, dépendance de pikepdf | 6.1.3 | BSD-3-Clause et exceptions ; textes `lxml-6.1.3.dist-info/licenses/LICENSE.txt` et `LICENSES.txt`, y compris les bibliothèques natives de la roue. |
 | packaging, dépendance de pikepdf | 26.3 | Apache-2.0 OU BSD-2-Clause ; `packaging-26.3.dist-info/licenses/LICENSE*`. |
 | Noto Sans Regular | Fichier TTF versionné dans les ressources | Copyright 2018 The Noto Project Authors ; SIL OFL 1.1, texte intégral dans `substidude/resources/OFL.txt`. Redistribution et intégration autorisées sous ses conditions. |
-| PySide6 / Qt | Non installés à cette étape | À inventorier lors de leur ajout : versions, modules, notices et obligations LGPL des composants réellement livrés. |
+| PySide6 Essentials / Qt | 6.12.0 / 6.12.0 | Option LGPL-3.0-only retenue (métadonnées : LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only). Modules utilisés : QtCore, QtGui, QtWidgets ; QtTest seulement pour la recette. Les roues PyPI sont déclarées valides pour les usages libres et commerciaux ; aucune licence commerciale achetée ou requise dans ce projet AGPL. |
+| shiboken6 | 6.12.0 | Dépendance de PySide6 Essentials ; option LGPLv3. Conserver les mentions, textes et sources exactes à la distribution. |
 
 Les chemins `*.dist-info` ci-dessus sont relatifs à `.venv/Lib/site-packages`.
 Les sources amont de PyMuPDF et MuPDF sont respectivement
@@ -25,6 +26,18 @@ https://github.com/pymupdf/PyMuPDF et https://github.com/ArtifexSoftware/mupdf.
 Avant distribution, obtenir les notices intégrales correspondant aux versions
 exactes de MuPDF et de ses composants tiers ; la seule déclaration de double
 licence de la roue ne suffit pas.
+
+**Ajout Qt pour les phases 3–5 :** versions identiques installées dans les trois
+environnements Windows. Les métadonnées `pyside6_essentials-6.12.0.dist-info/METADATA`
+déclarent les options libres ci-dessus, et les en-têtes des bindings les confirment.
+Cependant, les répertoires `licenses/` de ces deux roues ne contiennent que
+`LicenseRef-Qt-Commercial.txt` : ce fichier n'est **pas** le texte LGPLv3. Il faut
+encore joindre les textes libres intégraux, notices Qt et sources exactes exigibles
+avant distribution. Les DLL restent séparées dans un `onedir` ; leur remplaçabilité
+effective et les éventuels plugins/composants natifs embarqués restent à auditer.
+La présence de QtNetwork dans la roue ne signifie pas qu'il est utilisé par
+l'application : aucun appel réseau, ressource distante ou ouverture de lien n'a
+été ajouté. Les modules non nécessaires ne sont pas un engagement de distribution.
 
 ### Bibliothèques natives de Pillow
 

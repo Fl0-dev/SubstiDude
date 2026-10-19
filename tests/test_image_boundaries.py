@@ -115,7 +115,7 @@ class ImageBoundaryTests(unittest.TestCase):
                 document.save(output)
                 return output.getvalue()
 
-        with patch.object(test_pipeline, "sanitize_pdf", change_colorspace):
+        with patch("substidude.pipeline.sanitize_pdf", change_colorspace):
             with self.assertRaisesRegex(PDFError, "couleur"):
                 test_pipeline.replace_zones(image_variant_pdf("icc"), [(0, TARGET_RECT, "Toto")])
 

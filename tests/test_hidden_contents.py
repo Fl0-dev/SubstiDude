@@ -160,7 +160,7 @@ class HiddenContentTests(unittest.TestCase):
                 def contaminate(data):
                     return hidden_content_pdf(feature, data=sanitize_pdf(data))
 
-                with patch("test_pipeline.sanitize_pdf", contaminate):
+                with patch("substidude.pipeline.sanitize_pdf", contaminate):
                     with self.assertRaises(PDFError) as caught:
                         replace_zones(make_pdf("ocr"), [(0, TARGET_RECT, "Toto")])
                 self.assertNotIn(TARGET, str(caught.exception))

@@ -167,7 +167,8 @@ def _check_font_references(font):
     fields = {
         pikepdf.Name.Type0: {"/Encoding", "/DescendantFonts", "/ToUnicode"},
         pikepdf.Name.CIDFontType2: {"/CIDSystemInfo", "/FontDescriptor", "/W", "/DW", "/CIDToGIDMap"},
-        pikepdf.Name.Type1: {"/Encoding"},
+        pikepdf.Name.Type1: {"/Encoding", "/ToUnicode"},
+        pikepdf.Name.TrueType: {"/Encoding", "/ToUnicode", "/FirstChar", "/LastChar", "/Widths", "/FontDescriptor"},
     }
     if not isinstance(subtype, pikepdf.Name) or subtype not in fields:
         raise PDFError("Ce type de police n'est pas qualifié pour l'inspection des références.")
@@ -178,6 +179,13 @@ def _check_font_references(font):
         raise PDFError("L'encodage de police n'est pas qualifié.")
     if "/ToUnicode" in font:
         _check_stream_references(font.ToUnicode)
+    if subtype == pikepdf.Name.TrueType:
+        first, last, widths = font.get("/FirstChar"), font.get("/LastChar"), font.get("/Widths")
+        if type(first) is not int or type(last) is not int or not 0 <= first <= last <= 255:
+            raise PDFError("Les bornes de caractères de la police ne sont pas qualifiées.")
+        _check_numeric_array(widths)
+        if len(widths) not in (last - first, last - first + 1) or not widths or any(isinstance(value, pikepdf.Array) for value in widths):
+            raise PDFError("Les largeurs de la police ne correspondent pas aux caractères.")
     if subtype == pikepdf.Name.Type0:
         children = font.get("/DescendantFonts")
         if (not isinstance(children, pikepdf.Array) or len(children) != 1
@@ -198,22 +206,25 @@ def _check_font_references(font):
             raise PDFError("La largeur de police n'est pas qualifiée.")
         if "/CIDToGIDMap" in font and font.CIDToGIDMap != pikepdf.Name.Identity:
             raise PDFError("La table de glyphes de police n'est pas qualifiée.")
+    if subtype in (pikepdf.Name.CIDFontType2, pikepdf.Name.TrueType):
         descriptor = font.get("/FontDescriptor")
         _check_dictionary_keys(descriptor, {
             "/Type", "/FontName", "/Flags", "/FontBBox", "/ItalicAngle", "/Ascent",
-            "/Descent", "/CapHeight", "/StemV", "/FontFile2",
+            "/Descent", "/CapHeight", "/StemV", "/FontFile2", "/MissingWidth", "/CIDSet",
         })
         if (descriptor.get("/Type") != pikepdf.Name.FontDescriptor
                 or not isinstance(descriptor.get("/FontName"), pikepdf.Name)):
             raise PDFError("Le descripteur de police n'est pas qualifié.")
         _check_numeric_array(descriptor.get("/FontBBox"))
-        for key in set(descriptor.keys()) - {"/Type", "/FontName", "/FontBBox", "/FontFile2"}:
+        for key in set(descriptor.keys()) - {"/Type", "/FontName", "/FontBBox", "/FontFile2", "/CIDSet"}:
             if type(descriptor[key]) not in (int, float, Decimal):
                 raise PDFError("Le descripteur de police contient une référence non qualifiée.")
         if "/FontFile2" in descriptor:
             _check_stream_references(descriptor.FontFile2, {"/Length1"})
             if type(descriptor.FontFile2.get("/Length1")) is not int:
                 raise PDFError("La taille du programme de police n'est pas qualifiée.")
+        if "/CIDSet" in descriptor:
+            _check_stream_references(descriptor.CIDSet)
 
 
 def _check_icc_references(profile):
@@ -308,7 +319,7 @@ def _check_auxiliary_structure(document: pikepdf.Pdf) -> None:
         raise PDFError("Le PDF présente des anomalies structurelles non prises en charge.")
 
 
-def _open_supported_structure(data: bytes) -> pikepdf.Pdf:
+def _open_supported_structure(data: bytes, *, allow_missing_self_xref=True) -> pikepdf.Pdf:
     _check_file_size(len(data))
     try:
         document = pikepdf.Pdf.open(BytesIO(data), attempt_recovery=False)
@@ -317,6 +328,17 @@ def _open_supported_structure(data: bytes) -> pikepdf.Pdf:
     except pikepdf.PdfError:
         raise PDFError("Le fichier est invalide ou le PDF est malformé.") from None
     try:
+        # Exception exacte de qpdf : uniquement à l'ouverture du source, jamais
+        # pour valider une sortie. Ne pas filtrer les diagnostics ultérieurs.
+        initial_warnings = document.get_warnings()
+        known_warning = ("xref entry for the xref stream itself is missing - a common error handled "
+                         "correctly by qpdf and most other applications")
+        if initial_warnings:
+            if (not allow_missing_self_xref or len(initial_warnings) != 1
+                    or not initial_warnings[0].endswith(known_warning)):
+                raise PDFError("Le PDF présente des anomalies structurelles non prises en charge.")
+            with _open_mupdf(data):
+                pass  # Deuxième lecteur : aucune réparation autorisée.
         if document.is_encrypted:
             raise PDFError("Les PDF chiffrés ne sont pas pris en charge.")
         if not 1 <= len(document.pages) <= MAX_PAGES:
@@ -344,7 +366,14 @@ def sanitize_pdf(data: bytes) -> bytes:
     try:
         with _open_supported_structure(data) as document:
             for obj in _pdf_objects(document.objects):
-                if isinstance(obj, pikepdf.Array) or "/Metadata" not in obj:
+                if isinstance(obj, pikepdf.Array):
+                    continue
+                # Couverture du sous-ensemble : information auxiliaire, pas le
+                # programme de police. La retirer plutôt que conserver un flux
+                # opaque nouvellement admis ; aucune promesse de maintien PDF/A.
+                if obj.get("/Type") == pikepdf.Name.FontDescriptor and "/CIDSet" in obj:
+                    del obj["/CIDSet"]
+                if "/Metadata" not in obj:
                     continue
                 metadata = obj["/Metadata"]
                 if not isinstance(metadata, pikepdf.Stream) or metadata.get("/Type") != pikepdf.Name.Metadata:
@@ -369,8 +398,11 @@ def sanitize_pdf(data: bytes) -> bytes:
                     or "/Info" in verified.trailer or "/Info" in verified.Root):
                 raise PDFError("Le résultat du nettoyage ne satisfait pas les contrôles structurels.")
             if any("/Metadata" in obj for obj in _pdf_objects(verified.objects)
-                   if not isinstance(obj, pikepdf.Array)):
+                    if not isinstance(obj, pikepdf.Array)):
                 raise PDFError("Des métadonnées subsistent après le nettoyage.")
+            if any(obj.get("/Type") == pikepdf.Name.FontDescriptor and "/CIDSet" in obj
+                   for obj in _pdf_objects(verified.objects) if isinstance(obj, pikepdf.Dictionary)):
+                raise PDFError("Une information auxiliaire de police subsiste après nettoyage.")
         return result
     except PDFError:
         raise
@@ -510,6 +542,10 @@ def _check_simple_page(page: pikepdf.Page) -> None:
         raise PDFError("Les ressources de page absentes ou indirectement héritées ne sont pas qualifiées.")
     if set(resources.keys()) - {"/Font", "/XObject", "/ProcSet"}:
         raise PDFError("Les états graphiques, transparences et ressources complexes sont refusés.")
+    for font in resources.get("/Font", pikepdf.Dictionary()).values():
+        if (font.get("/Subtype") == pikepdf.Name.TrueType
+                or (font.get("/Subtype") == pikepdf.Name.Type1 and "/ToUnicode" in font)):
+            raise PDFError("Cette structure de police est qualifiée uniquement pour le texte natif.")
     objects = resources.get("/XObject", pikepdf.Dictionary())
     if not isinstance(objects, pikepdf.Dictionary):
         raise PDFError("Les ressources graphiques ne peuvent pas être inspectées de façon fiable.")
@@ -555,10 +591,15 @@ def classify_zone(data: bytes, page_number: int, rectangle) -> str:
     try:
         with _open_supported_structure(data) as structure, _open_mupdf(data) as document:
             rect = _zone_rectangle(document, page_number, rectangle)
-            _check_simple_page(structure.pages[page_number])
             page = document[page_number]
             images = [image for image in page.get_image_info(hashes=False, xrefs=False)
                       if pymupdf.Rect(image["bbox"]).intersects(rect)]
+            if images:
+                _check_simple_page(structure.pages[page_number])
+            else:
+                from substidude.native import check_page, check_zone
+                check_page(structure.pages[page_number])
+                check_zone(page, rect)
             spans = [span for span in page.get_texttrace()
                      if pymupdf.Rect(span["bbox"]).intersects(rect)]
             if any(span["opacity"] != 1 or span["wmode"] != 0 or span["dir"] != (1, 0)

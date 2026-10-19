@@ -32,7 +32,7 @@ class ClassificationTests(unittest.TestCase):
     def test_ambiguous_or_unqualified_structures_are_refused(self):
         for feature in ("visible-overlay", "text-overlap", "transparent-text", "hidden-text",
                         "mask", "vector", "clip", "shear", "image-rotation", "mirror",
-                        "image-scale", "two-images", "nested", "invisible-native", "text-clip",
+                         "image-scale", "two-images", "invisible-native", "text-clip",
                         "unknown-operator", "missing-resources", "invalid-xobject"):
             with self.subTest(feature=feature):
                 source = zone_case_pdf(feature)
@@ -40,6 +40,9 @@ class ClassificationTests(unittest.TestCase):
                     classify_zone(source, 0, TARGET_RECT)
                 self.assertNotIn("SECRET", str(caught.exception))
                 self.assertNotIn("AUTRE-TEXTE", str(caught.exception))
+        # Extension native qualifiée : ce cas n'est plus un refus de page
+        # systématique. Les Form raster/masques/ambiguïtés restent refusés.
+        self.assertEqual("native", classify_zone(zone_case_pdf("nested"), 0, TARGET_RECT))
 
     def test_invalid_and_empty_zones_are_refused(self):
         source = make_pdf()

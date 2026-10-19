@@ -60,7 +60,7 @@ L'outil doit supprimer réellement les informations ciblées dans les représent
 - Réutiliser facilement le dernier texte saisi pendant la session.
 - Utiliser un fond opaque et une police locale intégrée ou embarquée à l'export, avec prise en charge des accents français.
 - Adapter le mode d'insertion au contenu remplacé : texte PDF pour le texte natif, pixels pour les scans. Une substitution sur un scan ne doit pas ajouter de texte natif qui permettrait de contourner l'OCR lors des tests.
-- Permettre un réglage simple de la taille du texte et de la couleur du fond pour les scans non blancs.
+- Décision utilisateur : supprimer les réglages manuels de taille, de fond et de coordonnées ainsi que leur gestion côté moteur. La taille du remplacement est ajustée automatiquement à la zone, sur fond blanc opaque. Les coordonnées internes restent nécessaires à la sélection graphique ; leur saisie numérique n'est plus proposée.
 - Ne jamais tronquer silencieusement un remplacement : signaler qu'il ne tient pas et demander une correction avant l'export.
 - Ne pas reformater les paragraphes ou déplacer le reste de la page.
 - Autoriser le retour sur les substitutions avant l'export ; ne pas modifier le fichier source pendant l'édition.
@@ -71,7 +71,7 @@ La sélection doit englober toute l'information à retirer. Si un caractère ou 
 
 - Distinguer clairement les zones d'édition du résultat final.
 - Fournir un aperçu issu du PDF réellement transformé, et pas uniquement de rectangles superposés sur l'original.
-- Permettre un basculement original / résultat sur la même page, au même zoom et à la même position.
+- Afficher l'original et le résultat côte à côte, sur la même page, au même zoom et avec défilement synchronisé, sans bouton de basculement. Recalculer automatiquement l'aperçu réel après une courte pause dans les modifications ; aucune génération manuelle n'est nécessaire. Ne pas afficher un résultat périmé pendant le recalcul ou après un refus.
 - Toute modification d'une substitution invalide l'aperçu précédent et la confirmation de contrôle ; régénérer le résultat avant de permettre sa validation.
 - Présenter une liste des substitutions avec leur page et leur texte fictif.
 - Permettre de revenir directement à une zone depuis cette liste.
@@ -92,7 +92,8 @@ La sélection doit englober toute l'information à retirer. Si un caractère ou 
 - Ne pas rasteriser systématiquement le document entier.
 - Hors des zones modifiées, conserver autant que possible la résolution des scans, la géométrie des pages et le texte natif existant ; ne pas appliquer de recompression avec perte supplémentaire aux images. Les effets du nettoyage des contenus auxiliaires restent ceux décrits en section 6.
 - Vérifier que le résultat se rouvre correctement avant de confirmer la réussite.
-- Utiliser une écriture temporaire puis une finalisation sûre pour ne pas laisser un fichier final partiel en cas d'erreur. Préserver une destination existante si l'export échoue.
+- Utiliser une écriture temporaire puis une finalisation sûre pour ne pas laisser un fichier final partiel en cas d'erreur. Préserver une destination existante si l'export échoue avant finalisation.
+- **Arbitrage utilisateur du 19 octobre 2026 — option 1 :** conserver le remplacement d'une destination existante après confirmation explicite. Si une interruption, une expiration ou une perte d'accusé survient après une finalisation possible, annoncer un **état d'export incertain**, sans annoncer de succès ni garantir que l'ancienne destination est encore présente. La copie confirmée peut déjà avoir été enregistrée intégralement. Demander à l'utilisateur de contrôler la destination avant de recommencer et de confirmer à nouveau tout remplacement. Le source reste protégé et aucune destination finale partielle n'est validée ; aucune restauration transactionnelle de l'ancienne destination après finalisation n'est promise.
 
 ## 5. Traitement selon la nature du contenu
 
