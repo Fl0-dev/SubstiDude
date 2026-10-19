@@ -171,10 +171,30 @@ La limite doit être signalée dans la documentation utilisateur et, avant tout 
 - **PDF chiffré :** refus explicite dans la première version ; prise en charge par mot de passe à étudier ultérieurement. Aucun contournement de protection.
 - **PDF signé :** avertir que la modification invalide la signature ; aucune promesse de conservation de sa validité. Refuser l'export si le nettoyage requis n'est pas maîtrisé.
 - **PDF malformé ou fonctionnalité non supportée :** message clair, aucune sortie annoncée comme sûre.
-- **Documents volumineux :** ne rendre que les pages nécessaires ; prévoir des limites de ressources et des erreurs maîtrisées. Les seuils chiffrés seront fixés après un prototype sur des fichiers représentatifs non confidentiels.
+- **Documents volumineux :** ne rendre que les pages nécessaires ; appliquer les plafonds initiaux de la section 7.1 avec erreurs maîtrisées. Ils seront réévalués à partir des mesures sur documents synthétiques, sans prétendre à un support illimité.
 - **Sélections chevauchantes :** détecter le chevauchement et demander une correction avant export pour éviter qu'un remplacement efface un autre remplacement.
 - **Sélection hors page ou de taille nulle :** empêcher sa validation.
 - **Fermeture avec modifications non exportées :** demander confirmation avant de perdre le travail.
+
+### 7.1. Plafonds initiaux de ressources
+
+Le 19 octobre 2026, l'utilisateur délègue le choix de plafonds conventionnels et demande de poursuivre. Les valeurs suivantes sont des choix d'ingénierie prudents pour une application locale mono-utilisateur, **pas un standard universel du traitement PDF**. Elles complètent les quotas déjà décidés (0 < taille < 10 000 000 octets, 1 à 49 pages, au plus 40 000 000 pixels par image), sans les remplacer.
+
+| Ressource | Plafond retenu (volumes inclusifs) |
+| --- | --- |
+| Un flux auxiliaire décompressé, dont police/CMap/profil/contenu de page | 32 Mio |
+| Un flux image décompressé | 128 Mio |
+| Ensemble des flux décompressés uniques du PDF par inspection | 256 Mio |
+| Un rendu de page RGB | 16 000 000 pixels (environ 48 Mo de composantes, hors surcoûts) |
+| Engagement privé du processus PDF | 2 Gio |
+| Durée d'un travail PDF, démarrage inclus | 60 secondes, hors interaction utilisateur |
+| Une réponse entre processus, encodage compris | 64 Mio ; une seule réponse/travail actif, pas de file de travaux |
+
+1 Mio = 1 048 576 octets ; 1 Gio = 1 073 741 824 octets. La mémoire du processus inclut les bibliothèques et copies temporaires, pas seulement les octets du PDF. Le plafond de rendu ne modifie ni la résolution des images du PDF ni le périmètre raster à une seule image/occurrence ; un zoom trop coûteux doit être signalé, sans dégrader silencieusement le document. Un PDF admissible en poids/pages/pixels individuels peut être refusé par un autre budget.
+
+Contrôler les volumes avant allocation/décompression intégrale lorsque possible, puis borner le processus pour les allocations natives non prévisibles. En cas de dépassement : refus ou arrêt du travail avec diagnostic neutre, aucun résultat annoncé valide, original intact et aucune destination finale partielle. Le comptage des JPEG utilise une estimation prudente des composantes décodées, pas un décodage intégral de l'image pour vérifier le budget. Les lecteurs natifs peuvent allouer dès l'ouverture : les garde-fous de flux ne remplacent pas le budget du processus.
+
+Leur présence dans cette spécification ne signifie pas que tous les plafonds sont déjà appliqués : `plan.md` distingue les gardes vérifiées et celles encore à qualifier dans le banc Windows. Les nouveaux refus de ressources n'assouplissent aucun contrôle de suppression ni les refus de 11A ; la limite de confidentialité 11B reportée en section 6.2.1 reste inchangée. Toute modification ultérieure des valeurs nécessitera un nouvel arbitrage.
 
 ## 8. Ergonomie et accessibilité de l'application
 

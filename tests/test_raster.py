@@ -12,7 +12,7 @@ import pymupdf
 from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 from fixtures import FONT, KEPT, TARGET, TARGET_RECT, extract_with_pdftotext, make_pdf
-from substidude.pdf_engine import page_to_view_matrix
+from substidude.pdf_engine import page_to_view_matrix, render_page
 
 
 REPLACEMENT = "Société Élodie"
@@ -22,7 +22,7 @@ def replace_scan(kind, rotation=0, cropped=False):
     source = make_pdf(kind, rotation=rotation, cropped=cropped)
     with pymupdf.open(stream=source) as document:
         page = document[0]
-        before_render = page.get_pixmap()
+        before_render = render_page(page)
         rect = pymupdf.Rect(TARGET_RECT)
         if kind == "mixed":
             rect += (0, 200, 0, 200)
@@ -52,7 +52,7 @@ def replace_scan(kind, rotation=0, cropped=False):
         encoded = BytesIO()
         cleaned.save(encoded, format="PNG")
         page.replace_image(xref, stream=encoded.getvalue())
-        expected_render = page.get_pixmap()
+        expected_render = render_page(page)
         if kind == "ocr":
             page.add_redact_annot(rect, fill=None)
             page.apply_redactions(

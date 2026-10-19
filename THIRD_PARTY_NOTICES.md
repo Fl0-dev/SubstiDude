@@ -9,7 +9,7 @@ distribué à cette étape. Les mentions des auteurs et textes de licence doiven
 
 | Composant | Version testée | Licence / notice de référence |
 | --- | --- | --- |
-| Python | 3.12.0, 64 bits | PSF et licences historiques, `C:\Python312\LICENSE.txt` sur le poste de préparation ; utiliser une version corrective à jour avant documents non fiables. |
+| Python | 3.13.0, 64 bits (3.12.0 pour les premiers essais) | PSF et licences historiques de l'interpréteur réellement embarqué ; joindre ses textes avant distribution. Python 3.13.0 est autorisé pour les essais synthétiques du poste courant, pas qualifié ici pour des documents réels non fiables. |
 | PyMuPDF / MuPDF | 1.28.2 / 1.28.2 | Option GNU AGPLv3 retenue, pas de licence commerciale. Métadonnées et `pymupdf-1.28.2.dist-info/COPYING` ; ce dernier ne contient qu'une déclaration de double licence. |
 | Pillow | 13.0.0 | MIT-CMU et notices des bibliothèques embarquées, `pillow-13.0.0.dist-info/licenses/LICENSE`. |
 | pikepdf | 10.17.0 | MPL-2.0 ; `pikepdf-10.17.0.dist-info/licenses/LICENSE.txt` et notices sous `third-party-licenses/`. |
@@ -53,6 +53,13 @@ La qualification du paquet devra identifier les hooks d'exécution, le bootloade
 l'interpréteur et les bibliothèques réellement embarqués, joindre leurs textes,
 et fournir les sources correspondantes exigées par leurs licences. Ne pas
 annoncer cet audit de distribution comme terminé avant le conditionnement.
+
+Un paquet **de qualification uniquement**, `SubstiDudeProbe` en mode `onedir`,
+a été construit sur le poste Windows avec Python 3.13.0 et PyInstaller 6.22.3.
+Il embarque les ressources Noto/OFL, `LICENSE` et cet inventaire, sans PDFium ni
+interface Qt. Ce banc d'essai n'est pas une application distribuable : les textes
+et sources exactes des composants embarqués, notamment Python/MuPDF et leurs
+dépendances natives, restent à rassembler et à auditer avant toute distribution.
 
 ## Rendu indépendant — développement seulement
 

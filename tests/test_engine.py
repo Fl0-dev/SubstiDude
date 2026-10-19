@@ -15,7 +15,7 @@ from fixtures import (
     image_dimensions_pdf, make_pdf, zero_page_pdf,
 )
 from substidude.pdf_engine import (
-    MAX_FILE_BYTES, PDFError, _check_image_dimensions, open_pdf, page_to_view_matrix,
+    MAX_FILE_BYTES, PDFError, _check_image_dimensions, open_pdf, page_to_view_matrix, render_page,
 )
 
 
@@ -194,7 +194,7 @@ class NativeExperimentTests(unittest.TestCase):
             rect = pymupdf.Rect(TARGET_RECT)
             if cropped:
                 rect += (-10, -20, -10, -20)
-            before = page.get_pixmap()
+            before = render_page(page)
             page.add_redact_annot(rect, fill=(1, 1, 1))
             page.apply_redactions(
                 images=pymupdf.PDF_REDACT_IMAGE_NONE,

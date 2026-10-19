@@ -29,7 +29,7 @@ import pymupdf
 from PIL import Image
 
 from fixtures import FONT, KEPT, TARGET, TARGET_RECT, make_pdf, scan_image
-from substidude.pdf_engine import _open_mupdf, _open_supported_structure, _pdf_objects
+from substidude.pdf_engine import _open_mupdf, _open_supported_structure, _pdf_objects, render_page
 
 
 SAMPLES = ("native-1", "native-12", "native-49", "ocr-0.48mp", "ocr-1.92mp",
@@ -144,7 +144,7 @@ def probe(phase, rectangle):
             if phase.startswith("render-"):
                 scale = int(phase[-2])
                 # Une seule page ; jamais toutes les pages ni de fixture structurelle géante.
-                pixmap = document[0].get_pixmap(matrix=pymupdf.Matrix(scale, scale), alpha=False)
+                pixmap = render_page(document[0], scale)
                 details["render_pixels"] = pixmap.width * pixmap.height
                 details["render_sample_bytes"] = pixmap.stride * pixmap.height
     elapsed = perf_counter() - start

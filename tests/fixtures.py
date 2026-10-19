@@ -9,13 +9,15 @@ import shutil
 import subprocess
 import tempfile
 import struct
+import sys
 
 import pymupdf
 import pikepdf
 from PIL import Image, ImageCms, ImageDraw, ImageFont
 
 
-FONT = Path(__file__).resolve().parents[1] / "substidude/resources/NotoSans-Regular.ttf"
+# Le banc Windows gelé embarque les mêmes ressources, sans application utilisateur.
+FONT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1])) / "substidude/resources/NotoSans-Regular.ttf"
 TARGET = "SECRET-CIBLE-123"
 KEPT = "TEMOIN-CONSERVE-456"
 TARGET_RECT = (35, 70, 260, 105)

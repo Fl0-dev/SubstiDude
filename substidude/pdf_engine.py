@@ -9,9 +9,15 @@ from io import BytesIO
 from hashlib import sha256
 from decimal import Decimal
 import warnings
+import zlib
 
 import pikepdf
 import pymupdf
+
+from substidude.limits import (
+    MAX_IMAGE_STREAM_BYTES, MAX_RENDER_PIXELS, MAX_RESOURCE_STREAM_BYTES,
+    MAX_TOTAL_DECODED_STREAM_BYTES,
+)
 
 
 # Les diagnostics natifs peuvent contenir des fragments du document non fiable.
@@ -34,6 +40,80 @@ def _check_file_size(size: int) -> None:
         raise PDFError("Le fichier est vide (0 octet).")
     if size >= MAX_FILE_BYTES:
         raise PDFError("Le fichier doit faire strictement moins de 10 Mo.")
+
+
+def _bounded_stream_size(stream, limit):
+    """Compte les flux admis sans matérialiser leur décompression entière."""
+    def checked(size):
+        if size > limit:
+            raise PDFError("La limite des flux décompressés est dépassée.")
+        return size
+
+    encoding = stream.get("/Filter")
+    if encoding == pikepdf.Name.DCTDecode and stream.get("/Subtype") == pikepdf.Name.Image:
+        width, height = stream.get("/Width"), stream.get("/Height")
+        if type(width) is not int or type(height) is not int:
+            raise PDFError("Les dimensions d'une image ne sont pas prises en charge.")
+        _check_image_dimensions(width, height)
+        colorspace = stream.get("/ColorSpace")
+        components = 4  # Comptage prudent pour un espace non encore qualifié.
+        if colorspace == pikepdf.Name.DeviceGray:
+            components = 1
+        elif colorspace == pikepdf.Name.DeviceRGB:
+            components = 3
+        elif (isinstance(colorspace, pikepdf.Array) and len(colorspace) == 2
+              and colorspace[0] == pikepdf.Name.ICCBased
+              and isinstance(colorspace[1], pikepdf.Stream)
+              and type(colorspace[1].get("/N")) is int
+              and colorspace[1].N in (1, 3, 4)):
+            components = colorspace[1].N
+        return checked(width * height * components)
+
+    # Le fichier d'entrée est borné à 10 Mo ; ces octets restent compressés.
+    raw = stream.read_raw_bytes()
+    if encoding is None:
+        return checked(len(raw))
+    if encoding == pikepdf.Name.ASCIIHexDecode:
+        digits = 0
+        for value in raw:
+            if value == ord(">"):
+                break
+            if value in b"\x00\t\n\x0c\r ":
+                continue
+            if value not in b"0123456789abcdefABCDEF":
+                raise PDFError("L'encodage d'un flux ne peut pas être inspecté.")
+            digits += 1
+            checked((digits + 1) // 2)
+        return (digits + 1) // 2
+    if encoding != pikepdf.Name.FlateDecode:
+        raise PDFError("L'encodage des flux décompressés n'est pas qualifié.")
+    decoder = zlib.decompressobj()
+    size = 0
+    try:
+        for offset in range(0, len(raw), 65_536):
+            pending = raw[offset:offset + 65_536]
+            while True:
+                capacity = min(65_536, limit - size + 1)
+                block = decoder.decompress(pending, capacity)
+                size = checked(size + len(block))
+                pending = decoder.unconsumed_tail
+                if not pending and len(block) < capacity:
+                    break
+        if not decoder.eof:
+            raise PDFError("Un flux compressé est incomplet.")
+    except zlib.error:
+        raise PDFError("L'encodage d'un flux compressé est invalide.") from None
+    return size
+
+
+def _check_stream_budgets(document):
+    total = 0
+    for stream in document.objects:
+        if not isinstance(stream, pikepdf.Stream):
+            continue
+        individual = (MAX_IMAGE_STREAM_BYTES if stream.get("/Subtype") == pikepdf.Name.Image
+                      else MAX_RESOURCE_STREAM_BYTES)
+        total += _bounded_stream_size(stream, min(individual, MAX_TOTAL_DECODED_STREAM_BYTES - total))
 
 
 def _pdf_objects(objects):
@@ -241,6 +321,7 @@ def _open_supported_structure(data: bytes) -> pikepdf.Pdf:
             raise PDFError("Les PDF chiffrés ne sont pas pris en charge.")
         if not 1 <= len(document.pages) <= MAX_PAGES:
             raise PDFError("Le PDF doit contenir de 1 à 49 pages.")
+        _check_stream_budgets(document)
         _check_auxiliary_structure(document)
     except PDFError:
         document.close()
@@ -295,6 +376,21 @@ def sanitize_pdf(data: bytes) -> bytes:
         raise
     except (pikepdf.PdfError, pikepdf.PasswordError, TypeError, ValueError, RuntimeError):
         raise PDFError("Le nettoyage de ce PDF a échoué ; aucun résultat n'est validé.") from None
+
+
+def render_page(page: pymupdf.Page, scale: float = 1) -> pymupdf.Pixmap:
+    """Rendu RGB d'une page, refus avant allocation ; aucun sous-échantillonnage implicite."""
+    if type(scale) not in (int, float) or not isfinite(scale) or scale <= 0:
+        raise PDFError("Le facteur de rendu doit être positif et fini.")
+    width, height = page.rect.width * scale, page.rect.height * scale
+    if (not isfinite(width) or not isfinite(height) or width <= 0 or height <= 0
+            or width > MAX_RENDER_PIXELS or height > MAX_RENDER_PIXELS):
+        raise PDFError("Le rendu dépasse la limite de 16 mégapixels.")
+    matrix = pymupdf.Matrix(scale, scale)
+    bounds = (page.rect * matrix).irect
+    if bounds.width <= 0 or bounds.height <= 0 or bounds.width * bounds.height > MAX_RENDER_PIXELS:
+        raise PDFError("Le rendu dépasse la limite de 16 mégapixels.")
+    return page.get_pixmap(matrix=matrix, colorspace=pymupdf.csRGB, alpha=False)
 
 
 def page_to_view_matrix(page: pymupdf.Page, scale: float) -> pymupdf.Matrix:

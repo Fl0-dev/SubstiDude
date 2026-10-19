@@ -18,7 +18,10 @@ py -3.12 -m venv .venv
 Les téléchargements d'installation nécessitent Internet. Les traitements futurs
 doivent fonctionner hors ligne. Qt sera installé lorsque le prototype l'exigera.
 Utiliser une version corrective à jour de Python 3.12 pour le traitement de
-documents non fiables ; le poste de préparation dispose actuellement de 3.12.0.
+documents non fiables. Après les premiers essais en 3.12.0, le poste courant
+utilise Python 3.13.0 64 bits, explicitement autorisé sur documents synthétiques
+uniquement ; les environnements ont été recréés avec les versions épinglées.
+Sur ce poste sans lanceur `py`, utiliser `python -m venv .venv` avec cet interpréteur.
 
 Les tests utilisent uniquement des données synthétiques générées par le corpus ;
 les essais de fichiers et de révisions utilisent des répertoires temporaires nettoyés.
@@ -97,6 +100,17 @@ reproduit des résidus référencés malgré une réécriture complète, puis v�
 refus avant transformation et sur le résultat. Cela ne qualifie pas encore les
 contenus internes des programmes de police/CMap ni toutes les représentations cachées.
 
+Sur décision utilisateur, leur traitement approfondi est reporté à une itération
+future : voir `spec.md:6.2.1`. Des copies cachées de la cible peuvent donc subsister.
+Les contre-exemples sont conservés dans `tests/test_hidden_contents.py` : deux
+tests de protection restent rouges (19 sous-cas), sans être ignorés. La réussite
+des autres tests ne constitue pas une garantie d'anonymisation exhaustive.
+
+Les premières mesures de ressources et un banc Windows `spawn`/PyInstaller `onedir`
+sont décrits avec leurs commandes dans `plan.md` (§ 13, étapes 11C/11D). Le binaire
+`SubstiDudeProbe` ne réalise que des essais fixes sur fixtures synthétiques ;
+ce n'est ni l'application SubstiDude, ni un export utilisateur, ni un paquet à distribuer.
+
 ## Limites décidées
 
 - Fichier non vide et strictement inférieur à 10 000 000 octets.
@@ -104,6 +118,15 @@ contenus internes des programmes de police/CMap ni toutes les représentations c
 - Au maximum 40 000 000 pixels par image ; contrôle des dimensions des images
   XObject, masques et images inline. Ce plafond individuel ne borne pas la mémoire
   totale ni le rendu. Les dimensions indirectes des XObject sont refusées à ce stade.
+- Flux décompressés : 32 Mio par flux auxiliaire, 128 Mio par flux image et
+  256 Mio cumulés ; contrôle commun avant analyse des contenus et ouverture MuPDF.
+  Le rendu du prototype passe par une garde de 16 MP, sans réduction silencieuse.
+- Banc Windows borné : 2 Gio d'engagement par processus PDF (Job Object natif),
+  60 s par travail et 64 Mio par réponse IPC encodée. Les 15 scénarios du banc
+  source/runtime/gelé vérifient notamment les dépassements avec budgets réduits.
+  Cela ne crée pas un worker applicatif : les API appelées directement hors du
+  banc ne bénéficient pas automatiquement des trois gardes de processus.
+  Voir `spec.md:7.1` et les suivis 11E/11F de `plan.md`.
 - Temporaires d'export près de la destination, prévue locale et non synchronisée.
 - Aucune garantie d'anonymisation exhaustive ; contrôle humain nécessaire.
 
