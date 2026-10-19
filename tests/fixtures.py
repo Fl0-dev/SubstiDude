@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import struct
 
 import pymupdf
 import pikepdf
@@ -165,6 +166,88 @@ def hidden_reference_pdf(feature):
             raise ValueError("Référence synthétique inconnue")
         if container is not None:
             container.Private = document.make_stream(AUXILIARY_MARKER.encode())
+        output = BytesIO()
+        document.save(output)
+        return output.getvalue()
+
+
+def _font_with_synthetic_description(program):
+    """Ajoute un vrai enregistrement name ID 10 ; assembleur de fixture, pas un validateur."""
+    count = struct.unpack_from(">H", program, 4)[0]
+    tables = {}
+    for index in range(count):
+        tag, _, offset, length = struct.unpack_from(">4sIII", program, 12 + index * 16)
+        tables[tag] = program[offset:offset + length]
+    names = tables[b"name"]
+    version, records, storage = struct.unpack_from(">HHH", names)
+    if version != 0:
+        raise ValueError("La fixture attend une table name au format 0")
+    strings = names[storage:]
+    description = TARGET.encode("utf-16-be")
+    entries = [names[6 + index * 12:6 + (index + 1) * 12] for index in range(records)]
+    entries = [entry for entry in entries if struct.unpack_from(">HHHH", entry) != (3, 1, 0x409, 10)]
+    entries.append(struct.pack(">HHHHHH", 3, 1, 0x409, 10, len(description), len(strings)))
+    entries.sort(key=lambda entry: entry[:8])
+    tables[b"name"] = (
+        struct.pack(">HHH", 0, len(entries), 6 + len(entries) * 12)
+        + b"".join(entries)
+        + strings + description
+    )
+    head = bytearray(tables[b"head"])
+    head[8:12] = b"\0" * 4
+    tables[b"head"] = bytes(head)
+
+    def checksum(data):
+        padded = data + b"\0" * (-len(data) % 4)
+        return sum(struct.unpack(">" + "I" * (len(padded) // 4), padded)) & 0xFFFFFFFF
+
+    result = bytearray(program[:12] + b"\0" * (count * 16))
+    for index, (tag, data) in enumerate(sorted(tables.items())):
+        offset = len(result)
+        struct.pack_into(">4sIII", result, 12 + index * 16, tag, checksum(data), offset, len(data))
+        result.extend(data + b"\0" * (-len(data) % 4))
+        if tag == b"head":
+            head_offset = offset
+    struct.pack_into(">I", result, head_offset + 8, (0xB1B0AFBA - checksum(result)) & 0xFFFFFFFF)
+    return bytes(result)
+
+
+def hidden_content_pdf(feature, *, data=None):
+    """Copie synthétique de la cible dans des valeurs/flux, sans référence inconnue de police."""
+    with pikepdf.Pdf.open(BytesIO(make_pdf("ocr") if data is None else data)) as document:
+        page = document.pages[0]
+        font = page.obj.Resources.Font.noto
+        if feature == "font-name-record":
+            program = font.DescendantFonts[0].FontDescriptor.FontFile2
+            modified = _font_with_synthetic_description(program.read_bytes())
+            program.write(modified)
+            program.Length1 = len(modified)
+        elif feature in {"cmap-comment", "cmap-unused-mapping"}:
+            cmap = font.ToUnicode
+            content = cmap.read_bytes()
+            if feature == "cmap-comment":
+                content = b"% " + TARGET.encode() + b"\n" + content
+            else:
+                # Code absent des opérateurs TJ de la fixture ; valeur Unicode récupérable.
+                content = content.replace(b"endcmap", b"1 beginbfchar\n<FFFF> <"
+                                          + TARGET.encode("utf-16-be").hex().encode()
+                                          + b">\nendbfchar\nendcmap")
+            cmap.write(content)
+        elif feature == "font-name-value":
+            font.BaseFont = pikepdf.Name("/" + TARGET)
+        elif feature in {"cid-registry-value", "cid-ordering-value"}:
+            key = "/Registry" if feature == "cid-registry-value" else "/Ordering"
+            font.DescendantFonts[0].CIDSystemInfo[key] = pikepdf.String(TARGET)
+        elif feature == "catalog-lang":
+            document.Root.Lang = TARGET
+        elif feature == "viewer-preferences":
+            document.Root.ViewerPreferences = pikepdf.Dictionary(Private=TARGET)
+        elif feature == "pages-value":
+            document.Root.Pages.Private = TARGET
+        elif feature == "trailer-value":
+            document.trailer.Private = TARGET
+        else:
+            raise ValueError("Contenu synthétique inconnu")
         output = BytesIO()
         document.save(output)
         return output.getvalue()

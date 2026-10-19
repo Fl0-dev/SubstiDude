@@ -17,7 +17,7 @@ L'utilisateur développe et débogue des applications d'OCR et des traitements u
 
 Avant de transmettre une copie à une application ou à un service externe, il veut remplacer rapidement les informations confidentielles par des données fictives telles que « Toto » ou « John Doe ».
 
-L'outil doit supprimer réellement les informations ciblées, et non simplement les masquer à l'affichage. Il doit préserver autant que possible le document utile au débogage.
+L'outil doit supprimer réellement les informations ciblées dans les représentations prises en charge, et non simplement les masquer à l'affichage. Il doit préserver autant que possible le document utile au débogage. La limite explicitement reportée en section 6.2.1 s'applique : une copie cachée de l'information peut subsister dans les structures qui y sont listées.
 
 ## 3. Objectifs et limites
 
@@ -37,6 +37,7 @@ L'outil doit supprimer réellement les informations ciblées, et non simplement 
 - L'outil contribue aux mesures de confidentialité, mais ne garantit ni conformité réglementaire ni maintien d'une certification ISO 27001.
 - Toute réécriture peut modifier la structure interne du PDF et faire disparaître un bug. L'identité binaire et la préservation de tous les comportements OCR ne sont pas garanties.
 - Aucun export de cette première version ne doit être présenté comme automatiquement « certifié anonyme ».
+- Décision utilisateur du 19 octobre 2026 : la qualification et le traitement approfondis des contenus internes de polices/CMap et des autres représentations cachées listées en section 6.2.1 sont reportés à une itération future. Ce report accepte une limite connue de confidentialité, pas une preuve de suppression de ces copies.
 
 ## 4. Périmètre de la première version
 
@@ -125,6 +126,7 @@ Sur une page mixte, choisir le mode selon le contenu de la zone, et non selon la
 - Prendre en compte les masques, transparences, objets vectoriels et contenus masqués associés aux zones ciblées.
 - Ne pas se limiter à rechercher une chaîne dans les octets du fichier : compression, encodage et images rendent cette vérification insuffisante.
 - Si le moteur ne sait pas traiter sûrement un contenu, bloquer l'export avec une explication ; ne pas remplacer silencieusement la suppression par un masque visuel.
+  Cette exigence porte sur le périmètre pris en charge ; les représentations explicitement différées en section 6.2.1 n'introduisent pas un nouveau refus obligatoire dans l'itération actuelle. Les contrôles et refus déjà établis restent obligatoires.
 - La première version ne lance pas d'OCR : la sélection manuelle fonctionne sans reconnaissance de texte.
 
 ## 6. Nettoyage et confidentialité
@@ -145,6 +147,14 @@ Par défaut, supprimer les métadonnées documentaires et XMP, commentaires, ann
 Traiter également les couches optionnelles et les structures susceptibles de conserver du texte sensible, notamment les textes alternatifs, `ActualText` et structures d'accessibilité. Si leur nettoyage fiable n'est pas pris en charge, bloquer ce type d'export. Prévenir que le nettoyage peut retirer des fonctions interactives ou d'accessibilité du document.
 
 Les contenus visibles nécessaires doivent être intégrés au rendu avant suppression de leur conteneur si cela est supporté de manière sûre ; sinon, refuser le document avec un motif explicite plutôt que perdre du contenu sans avertissement.
+
+### 6.2.1. Représentations cachées reportées à une itération future
+
+**Arbitrage utilisateur du 19 octobre 2026 :** le travail approfondi de l'unité 11B n'est pas prioritaire et est reporté. Sont concernés les contenus internes des programmes de police (notamment les descriptions TrueType), les commentaires et correspondances inutilisées de CMap, les valeurs textuelles déjà admises des propriétés de police/CID, ainsi que les valeurs auxiliaires du catalogue, des préférences d'affichage, du dictionnaire de pages et du trailer mises en évidence par les essais 11B. Leurs copies de la cible ne sont pas garanties supprimées ni détectées dans l'itération actuelle. Une réécriture complète ou un aperçu correct ne supprime pas cette limite ; une inspection des objets peut encore récupérer ces informations.
+
+Ce report ne désactive aucun nettoyage ni refus déjà qualifié : métadonnées Info/XMP, miniatures, anciennes révisions, références auxiliaires inconnues contrôlées en 11A, `ActualText`, structures d'accessibilité, couches, annotations, formulaires et autres refus existants restent soumis aux exigences applicables. La suppression du texte natif/OCR et des pixels ciblés, les espaces couleur conservés et le périmètre raster à une seule image/occurrence restent inchangés. Une occurrence indépendante hors zone ne doit pas être assimilée à un résidu de la cible.
+
+La limite doit être signalée dans la documentation utilisateur et, avant tout futur export utilisateur, dans l'information préalable au partage : aucune garantie de suppression exhaustive des copies cachées, même après confirmation visuelle. Les tests de contre-exemples sont conservés pour l'itération future ; ne pas annoncer leur correction ou la qualification globale du moteur. Ce report autorise la poursuite des mesures de ressources puis de la qualification Windows ; il ne valide ni le jalon moteur ni l'utilisation de documents clients.
 
 ### 6.3. Données locales et erreurs
 
@@ -262,7 +272,7 @@ Conserver un petit contrôle de non-régression exécutable s'appuyant sur un co
 
 Pour chaque cas pris en charge, exporter puis rouvrir le résultat et vérifier la disparition des marqueurs ciblés dans le texte, les images et les contenus auxiliaires concernés. Vérifier aussi la présence du remplacement sous la forme attendue : texte extractible pour le natif, pixels sans texte extractible ajouté pour le scan. Un cas volontairement non pris en charge doit vérifier le refus explicite et l'absence d'export final.
 
-Compléter ce contrôle par une inspection avec un outil indépendant du moteur de génération, incluant les objets inutilisés, contenus masqués et révisions antérieures. Une simple vérification visuelle, une recherche textuelle brute ou l'absence du nom dans un seul extracteur ne suffit pas à prouver la suppression.
+Compléter ce contrôle par une inspection avec un outil indépendant du moteur de génération, incluant les objets inutilisés, contenus masqués et révisions antérieures, dans le périmètre actuel avec l'exception explicite de la section 6.2.1. Une simple vérification visuelle, une recherche textuelle brute ou l'absence du nom dans un seul extracteur ne suffit pas à prouver la suppression. Les contre-exemples différés de 11B restent documentés séparément et ne constituent pas des critères corrigés de cette itération.
 
 ## 12. Décisions à prendre pendant la planification
 
