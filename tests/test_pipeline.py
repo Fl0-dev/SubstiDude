@@ -47,7 +47,24 @@ def outside_characters(page, rectangles):
                    if not any(pymupdf.Rect(char[3]).intersects(rect) for rect in rectangles))
 
 
-def verify_result(result, geometry, outside_text, plan, expected_images):
+def image_colors(structure):
+    """Propriétés couleur indépendantes des numéros d'objets après réécriture."""
+    colors = Counter()
+    for obj in structure.objects:
+        if not isinstance(obj, pikepdf.Stream) or obj.get("/Subtype") != pikepdf.Name.Image:
+            continue
+        space = obj.get("/ColorSpace")
+        if isinstance(space, pikepdf.Array):
+            profile = space[1]
+            color = (str(space[0]), profile.get("/N"), str(profile.get("/Alternate")),
+                     tuple(profile.get("/Range", [])), sha256(profile.read_bytes()).digest())
+        else:
+            color = str(space)
+        colors[(obj.get("/Width"), obj.get("/Height"), obj.get("/BitsPerComponent"), color)] += 1
+    return colors
+
+
+def verify_result(result, geometry, outside_text, plan, expected_images, expected_colors):
     """Contrôles par résultat de cette expérience ; pas une qualification PDF générale."""
     with _open_supported_structure(result) as structure, _open_mupdf(result) as document:
         if len(geometry) != document.page_count or structure.check_pdf_syntax():
@@ -77,6 +94,8 @@ def verify_result(result, geometry, outside_text, plan, expected_images):
                 recovered[image_key(image)] += 1
         if recovered != Counter(expected_images.values()):
             raise PDFError("Les images récupérables ne correspondent pas aux pixels attendus.")
+        if image_colors(structure) != expected_colors:
+            raise PDFError("Les espaces couleur des images n'ont pas été conservés.")
 
 
 def replace_zones(source, zones):
@@ -109,6 +128,7 @@ def replace_zones(source, zones):
         with _open_supported_structure(source) as structure, _open_mupdf(source) as document:
             for page in structure.pages:
                 _check_simple_page(page)
+            expected_colors = image_colors(structure)
             geometry, outside_text = [], []
             visible_images = set()
             image_infos = {}
@@ -213,7 +233,7 @@ def replace_zones(source, zones):
                     if page.insert_textbox(rect + (1, 1, -1, -1), text, fontname=FONT_NAME, fontsize=14) < 0:
                         raise PDFError("Le remplacement natif ne tient pas dans la zone.")
             result = sanitize_pdf(document.tobytes(garbage=4, deflate=True))
-        verify_result(result, geometry, outside_text, plan, expected_images)
+        verify_result(result, geometry, outside_text, plan, expected_images, expected_colors)
         return result
     except PDFError:
         raise

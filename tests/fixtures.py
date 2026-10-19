@@ -430,6 +430,12 @@ def auxiliary_pdf(feature, *, nested=False):
                 Type=pikepdf.Name.Annot, Subtype=pikepdf.Name.Text,
                 Rect=[20, 20, 40, 40], Contents=AUXILIARY_MARKER,
             ))])
+        elif feature == "link":
+            page.obj.Annots = [document.make_indirect(pikepdf.Dictionary(
+                Type=pikepdf.Name.Annot, Subtype=pikepdf.Name.Link,
+                Rect=[20, 20, 40, 40],
+                A=pikepdf.Dictionary(S=pikepdf.Name.URI, URI="https://example.invalid/"),
+            ))]
         elif feature == "form":
             document.Root.AcroForm = pikepdf.Dictionary(Fields=[document.make_indirect(
                 pikepdf.Dictionary(FT=pikepdf.Name.Tx, T="synthetic", V=AUXILIARY_MARKER)

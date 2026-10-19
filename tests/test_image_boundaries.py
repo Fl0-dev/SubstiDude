@@ -104,6 +104,21 @@ class ImageBoundaryTests(unittest.TestCase):
                 test_pipeline.replace_zones(source, [(0, TARGET_RECT, "Toto")])
             replace.assert_not_called()
 
+    def test_final_colorspace_change_is_refused_even_with_equal_components(self):
+        cleanup = test_pipeline.sanitize_pdf
+
+        def change_colorspace(data):
+            with pikepdf.Pdf.open(BytesIO(cleanup(data))) as document:
+                image, = document.pages[0].get_images().values()
+                image.ColorSpace = pikepdf.Name.DeviceRGB
+                output = BytesIO()
+                document.save(output)
+                return output.getvalue()
+
+        with patch.object(test_pipeline, "sanitize_pdf", change_colorspace):
+            with self.assertRaisesRegex(PDFError, "couleur"):
+                test_pipeline.replace_zones(image_variant_pdf("icc"), [(0, TARGET_RECT, "Toto")])
+
     def test_unqualified_image_parameters_are_refused(self):
         for feature in ("intent", "interpolation", "predictor", "filter-chain"):
             with self.subTest(feature=feature):

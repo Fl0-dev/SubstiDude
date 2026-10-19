@@ -20,7 +20,7 @@ from test_independent import render_and_extract
 class AuxiliaryTests(unittest.TestCase):
     def test_unsupported_content_refused_at_open_and_cleanup(self):
         for feature in ("actualtext", "escaped-actualtext", "properties", "annotation",
-                        "form", "attachment", "action", "layer", "structure", "destination", "type3",
+                        "form", "attachment", "action", "link", "layer", "structure", "destination", "type3",
                         "unknown-root", "postscript", "alternate-image"):
             for nested in (False, True) if feature in {"actualtext", "escaped-actualtext"} else (False,):
                 with self.subTest(feature=feature, nested=nested):
